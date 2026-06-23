@@ -1,0 +1,44 @@
+stages:
+  - lint
+  - test
+  - release
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - $CI_PROJECT_DIR/.cache/pip
+
+auto_lint:
+  stage: lint
+  image: registry.dtl/eng/lint.dtl/cli:latest
+  tags:
+    - sg
+  script:
+    - pandora login --ci
+    - lint --check
+
+test:
+  stage: test
+  image: registry.dtl/pandora/docker/uv:latest
+  tags:
+    - sg
+  script:
+    - pandora login --ci
+    - make test
+
+release_to_registry_sg:
+  stage: release
+  image: registry.dtl/pandora/docker/podman:latest
+  only:
+    refs:
+      - tags
+    variables:
+      - $CI_SERVER_HOST == "gitlab.dtl"
+  tags:
+    - docker_socket_bind
+    - sg
+  script:
+    - pandora login --ci
+    - make release
