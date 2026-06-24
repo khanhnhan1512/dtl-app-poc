@@ -63,9 +63,11 @@ tabs) — default-deny.
 
 **Remote wipe (with the critical gotcha).** Clear Electron data (`session.clearStorageData`,
 `clearCache`, `clearAuthCache`), clear stored tokens (safeStorage), **and** delete the client
-cert from the OS store via external tools (`pk12util -F` / `certutil -D`). **Clearing only
-Electron's data leaves the OS-store cert intact → the wipe fails its purpose.** This is a
-must-prove constraint; prove it early.
+cert from the OS store. On Ubuntu (NSS) use **`certutil -F -n <nickname> -d sql:$HOME/.pki/nssdb`**
+to remove the private key *and* its certificate (`certutil -D` removes only the cert; note that
+`pk12util` only imports / exports and **cannot delete**). On Windows, use `certutil -delstore` /
+PowerShell `Remove-Item Cert:\CurrentUser\My\<thumbprint>`. **Clearing only Electron's data leaves
+the OS-store cert intact → the wipe fails its purpose.** This is a must-prove constraint; prove it early.
 
 **Token storage.** `safeStorage.encryptString` / `decryptString`, main-process only,
 OS-encrypted. Caveat: on headless Linux without a secret store it falls back to a `basic_text`

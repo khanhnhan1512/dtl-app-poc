@@ -32,7 +32,7 @@ Headline only — **full detail, comparison, gotchas, and rationale live in `doc
 - **Network:** All internal `.dtl` web apps are currently plain HTTP.
 - **mTLS Testing:** Handled by spinning up a local HTTPS endpoint with `ssl_verify_client on` and an OpenSSL self-signed CA.
 - **Cert Storage:** Ubuntu stores the client certificate in `~/.pki/nssdb`.
-- **Wipe Gotcha:** The wipe command MUST explicitly invoke OS tools (like `pk12util` or `certutil`) to delete the cert from the OS store; clearing Electron's app data is not enough.
+- **Wipe Gotcha:** The wipe MUST delete the cert from the OS store with `certutil -F` (Ubuntu NSS — removes key + cert; `pk12util` only imports/exports and cannot delete). Clearing Electron's app data alone is not enough.
 
 ## Conventions
 - **Language:** All documentation, comments, and commit messages must be in English.

@@ -73,8 +73,10 @@ These are the "get it right now or pay later" items; they map directly onto the 
      `ERR_BAD_SSL_CLIENT_AUTH_CERT`, confirm the full chain is sent (#28553; verify with Wireshark).
   2. A non-designated domain receives **no** cert (`cb()` empty) — proving "mTLS for *certain*
      websites," not all traffic.
-  3. The wipe deletes the cert from NSS (`pk12util -F` / `certutil -D`) **and** clears Electron data
-     (`session.clearStorageData` + `clearCache` + `clearAuthCache`); `certutil -L` confirms it gone.
+  3. The wipe deletes the cert+key from NSS (`certutil -F -n <nickname> -d sql:$HOME/.pki/nssdb` —
+     removes the private key **and** its cert; `certutil -D` would remove only the cert) **and** clears
+     Electron data (`session.clearStorageData` + `clearCache` + `clearAuthCache`); `certutil -L`
+     and `certutil -K` confirm both are gone.
   4. After wipe + reload the same page **fails** the handshake — proving the wipe truly locks the app
      out, not merely cleared cookies.
   5. The manual `pk12util` re-injection script restores the cert and access (confirms the D4
