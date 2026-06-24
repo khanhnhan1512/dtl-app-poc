@@ -1,7 +1,7 @@
 # DTL App PoC — CLAUDE.md
 
 ## Project overview
-This is a proof-of-concept (PoC) for a custom managed/enterprise browser controlled by DTL. It is built as a locked-down native desktop application wrapping a WebView to securely access internal corporate portals. The Brainstorming phase is complete; the Architecture/Plan phase has **NOT** started and must only begin when explicitly authorized.
+This is a proof-of-concept (PoC) for a custom managed/enterprise browser controlled by DTL. It is built as a locked-down native desktop application wrapping a WebView to securely access internal corporate portals. The Brainstorming phase is complete and the **Planning phase is now authorized**: plans are written to `plans/`. **Implementation stays gated** — code for a milestone is written only after that milestone's plan has been reviewed and approved (see Rules).
 
 ## Scope (locked)
 - **5 Core Features ONLY:** Custom branding, custom homepage, custom OIDC auth, device-bound mTLS, and an app-level remote wipe.
@@ -20,7 +20,8 @@ Headline only — **full detail, comparison, gotchas, and rationale live in `doc
 - *Comparison, mechanisms, phase-plan libraries, and mobile forward-look → `docs/techstack.md`.*
 
 ## Repo layout
-*(To be populated as code is generated during the Plan phase)*
+- `plans/` — the roadmap and per-milestone detailed plans (Planning-phase output; each reviewed before its implementation).
+- *(Source layout to be populated as code is generated, per approved plans.)*
 
 ## Commands
 *(To be populated with build/run commands once the Electron app is scaffolded)*
@@ -38,7 +39,7 @@ Headline only — **full detail, comparison, gotchas, and rationale live in `doc
 - *(Code style conventions to be defined in the Plan phase)*
 
 ## Rules (always / never)
-- **NEVER** start the Architecture/Plan phase — or generate implementation code/scaffolding — unless explicitly authorized. Brainstorming is the only completed phase.
+- **Two-tier gate (planning vs implementation):** Writing plans is now authorized — Claude Code MAY create the roadmap and per-milestone plans under `plans/`. But **NEVER write implementation code or scaffolding for a milestone until that milestone's plan has been reviewed and explicitly approved.** Approval is per-milestone, not blanket. After writing a plan, stop and wait for review.
 - **NEVER** expand the scope beyond the 5 core features without explicit authorization. Do not add DLP features.
 - **NEVER** over-engineer. This is a PoC to learn mechanics, not a production-hardened app.
 - **NEVER** embed web content via the `<webview>` tag or `BrowserView` (deprecated/unstable). Use `WebContentsView`.
