@@ -11,13 +11,13 @@ This is a proof-of-concept (PoC) for a custom managed/enterprise browser control
 - *Refer to `docs/brainstorm.md` for full rationale.*
 
 ## Tech stack & key decisions
-- **Framework:** Electron (bundled Chromium ensures no engine divergence).
-- **Authentication:** OIDC via a local Zitadel test instance.
-- **mTLS:** Device-bound. Handled via Electron's `select-client-certificate` intercepting the OS cert store.
-- **UI:** Locked single-purpose KIOSK shell (no tabs, no address bar, same-window navigation) with a strict domain allow-list.
-- **Web embedding:** Use `WebContentsView` (with `BaseWindow`) — NOT the `<webview>` tag (Chromium architectural churn; Electron officially advises against it) nor the deprecated `BrowserView`. Many older online examples use those; do not copy them.
-- **Kill Switch:** App-level data wipe — clears cache, cookies, localStorage, auth tokens, AND the OS-level client cert.
-- *Refer to `docs/brainstorm.md` (Decisions Log) for details.*
+Headline only — **full detail, comparison, gotchas, and rationale live in `docs/techstack.md`** (the single source of truth, validated 2026-06-24).
+- **Framework:** Electron (one bundled Chromium for Ubuntu + Windows — no engine divergence).
+- **Authentication:** OIDC (local Zitadel for the PoC; Google Workspace later).
+- **mTLS:** Device-bound, per-domain via `select-client-certificate`. Provision certs via external `pk12util`/`certutil` — NOT `app.importCertificate` (broken on Linux).
+- **UI / embedding:** KIOSK shell (no tabs/address bar, default-deny allow-list) built on `WebContentsView` + `BaseWindow`.
+- **Kill switch:** App-level wipe — Electron session data + tokens + the OS-store client cert.
+- *Comparison, mechanisms, phase-plan libraries, and mobile forward-look → `docs/techstack.md`.*
 
 ## Repo layout
 *(To be populated as code is generated during the Plan phase)*
@@ -32,7 +32,6 @@ This is a proof-of-concept (PoC) for a custom managed/enterprise browser control
 - **mTLS Testing:** Handled by spinning up a local HTTPS endpoint with `ssl_verify_client on` and an OpenSSL self-signed CA.
 - **Cert Storage:** Ubuntu stores the client certificate in `~/.pki/nssdb`.
 - **Wipe Gotcha:** The wipe command MUST explicitly invoke OS tools (like `pk12util` or `certutil`) to delete the cert from the OS store; clearing Electron's app data is not enough.
-- **Stack validation (2026-06-24):** Electron + `select-client-certificate` mTLS confirmed current and sound; latest stable is Electron 42–43 (Chromium 148, Node 24). When scaffolding, use `electron-vite` (build/dev) + `electron-builder` (packaging/auto-update), and wrap any native module behind an interface to ease future Electron upgrades.
 
 ## Conventions
 - **Language:** All documentation, comments, and commit messages must be in English.
@@ -47,6 +46,7 @@ This is a proof-of-concept (PoC) for a custom managed/enterprise browser control
 - **ALWAYS** default to KISS (Keep It Simple, Stupid) for infrastructure. Use local stubs/mocks instead of building full backends.
 
 ## Reference docs
-- `docs/brainstorm.md`: The source of truth for all decisions.
+- `docs/techstack.md`: Single source of truth for the technology stack (decisions, gotchas, libraries, mobile look-ahead).
+- `docs/brainstorm.md`: The source of truth for all brainstorming decisions.
 - `docs/task_description.md`: The original task description for this PoC.
 - `images/*.svg`: Architecture & app-anatomy diagrams for quick onboarding.

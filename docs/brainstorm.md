@@ -329,41 +329,19 @@ the datacenter, native L3 routing, **no NetBird installed**):
 - **I (distribution) → desktop only.** Linux = **AppImage** (+ optional `.deb`); **no code
   signing** needed for the PoC. iOS App-Store/WebKit issues + signing owners are deferred with mobile.
 
-### Group C decision — desktop framework = **Electron** (2026-06-23)
+### Tech stack — consolidated into `docs/techstack.md` (updated 2026-06-24)
 
-Deciding factor = **programmatic per-domain mTLS client cert (D2)** on Ubuntu + Windows.
-Verified against current docs/issue trackers (cited):
-
-| Framework | Engine (Linux / Windows) | Programmatic client-cert mTLS | Verdict for this PoC |
-|---|---|---|---|
-| **Electron** ✅ | **Chromium / Chromium** (bundled, identical) | `app.on('select-client-certificate')` — per-URL, mature, OS store; chain bug #28553 **fixed** | **CHOSEN** — one engine both OSes, JS/TS, lowest risk |
-| Tauri v2 | **WebKitGTK** / WebView2 | Linux: client-cert is engine-level only, **not wired up by wry**, no `.p12`, no UI, raw-FFI only → **unproven/high-risk**. Win: WebView2 ok | ❌ Linux mTLS risk too high; Rust unfamiliar |
-| Wails | WebKitGTK / WebView2 | Same WebKitGTK Linux blocker as Tauri | ❌ same Linux risk |
-| Qt WebEngine | **Chromium / Chromium** | `QWebEnginePage::selectClientCertificate` — solid, consistent | ⚠️ works, but C++/PyQt ≠ team's JS/TS skill |
-
-**Why Electron wins (brutal honesty):** Tauri's smaller binary / lower RAM are irrelevant to a
-PoC and don't offset that its **Linux engine (WebKitGTK) has no proven client-cert path** —
-fatal when Ubuntu is the *primary* OS and mTLS is the *must-prove* feature. Electron bundles
-the **same Chromium on both targets** (write/test once, identical TLS stack) and the team
-already writes JS/TS (Next.js). KISS + lowest risk on the one thing that matters → Electron.
-
-**D2 — how Electron does mTLS on Ubuntu/Windows (the mechanism):**
-
-1. Server (our local test nginx) sends a TLS `CertificateRequest` → Chromium fires
-   `app.on('select-client-certificate', (e, webContents, url, list, cb) => …)`.
-2. Handler: `e.preventDefault()`, branch on `url` (present cert **only** for designated
-   domains — this *is* "mTLS for certain websites"), pick from `list`, `cb(cert)`; for other
-   domains `cb()` with no cert.
-3. `list` comes from the **OS cert store**; the **OS performs the signing — the app never
-   touches the private key** (so it can be non-exportable / TPM-backed on Windows).
-4. **Cert provisioning per OS:** Ubuntu → import `.p12` into NSS `~/.pki/nssdb`
-   (`pk12util -i … -d sql:$HOME/.pki/nssdb`; this DB already exists on dshell). Windows →
-   import into `CurrentUser\My` (`certutil -importpfx` / `Import-PfxCertificate`).
-5. **⚠️ Wipe interaction (links D2 → A3/F):** because the key lives in the OS store, the
-   app-level wipe must **also delete the cert from NSS / the Windows store** (`certutil -D`,
-   `pk12util`), not just clear Electron's own data dir — otherwise the cert survives the kill.
-6. **Watch-outs:** prefer external `pk12util` over `app.importCertificate` (trust-bit bugs
-   #32816/#32825); verify the full chain is sent (#28553 fixed but confirm).
+> The detailed framework comparison (Electron vs Tauri / Wails / Qt / ...), the Electron
+> mTLS mechanism (`select-client-certificate`), the embedding / kiosk pattern, the wipe
+> gotcha, the phase-plan library recommendations, and the mobile forward-look now live in
+> **`docs/techstack.md`** — the single source of truth for tech-stack detail (validated &
+> expanded via research on 2026-06-24). Decisions C and D above remain the brainstorming
+> record; see `techstack.md` for the current, validated technical detail.
+>
+> Headline (unchanged): **framework = Electron** (one bundled Chromium for Ubuntu + Windows;
+> mature per-domain `select-client-certificate` mTLS; JS/TS fits the team). One research
+> correction: provision client certs via external `pk12util` / `certutil`, **not**
+> `app.importCertificate` (broken on Linux).
 
 ### Decisions Log
 
