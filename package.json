@@ -1,0 +1,15 @@
+{
+  "name": "dtl-app",
+  "version": "0.0.1",
+  "description": "DTL managed enterprise browser PoC",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview"
+  },
+  "devDependencies": {
+    "electron": "^42.0.0",
+    "electron-vite": "^2.0.0"
+  }
+}
