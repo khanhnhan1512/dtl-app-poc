@@ -200,9 +200,13 @@ OIDC, and the management backend are explicitly **out of M0** — they are later
   Step 3; Step 4 gates Step 5).
 - On M0 sign-off, write the detailed **M1 (kiosk shell)** plan — gated, one milestone at a time.
 
-## Unresolved questions
+## Setup decisions (resolved before implementation, 2026-06-24)
 
-- **nginx host:** system nginx vs a throwaway container on the dev box? (Either works; pick at
-  implementation.)
-- **GUI run target:** is a real Ubuntu desktop available for the render check, or do we rely on
-  `xvfb-run` for M0?
+- **nginx host → podman container.** `dshell` provides **podman** (rootless, no daemon), not
+  docker. The nginx mTLS test server runs as a throwaway `podman run -d ... nginx:alpine` container
+  binding to `localhost:8443` and `:8444`. The `podman` CLI is largely docker-compatible. Recorded in
+  `CLAUDE.md` under "Environment & gotchas."
+- **GUI render check → `xvfb-run`.** `dshell` is headless. Electron GUI tests run under
+  `xvfb-run -a`. TLS handshake verification (curl-level) is display-independent and works without
+  xvfb-run; only the "window renders" check requires it. Use `--quit-after-load` flag in main to
+  allow the app to self-terminate in headless test runs.
