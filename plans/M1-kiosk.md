@@ -79,7 +79,7 @@ to a single `BrowserWindow` later is mechanical. The plan isolates the window co
 `src/main/window.js` so the choice is swappable in one file.
 
 ```
-BaseWindow  (title "DTL Secure Browser", app.setName)
+BaseWindow  (title "DTL App", app.setName)
 ├── chromeView  : WebContentsView  → local renderer (DTL logo + product name)   [~48px tall, top]
 └── portalView  : WebContentsView  → HOME_URL (remote, mTLS)                     [fills the rest]
        │  secure webPreferences (contextIsolation/sandbox/nodeIntegration:false/webviewTag:false)
@@ -92,6 +92,18 @@ BaseWindow  (title "DTL Secure Browser", app.setName)
 - **Two allow-lists, distinct on purpose, both in `config.js`:** `MTLS_ALLOWLIST` (M0 — hosts that get
   a *client cert*) and **`NAV_ALLOWLIST`** (M1 — hosts the user may *navigate to*). They overlap but
   are not the same concept; keeping them separate avoids coupling "can go here" to "present a cert here."
+- **Session partition — wipe compatibility (important forward-safety note):** M1 keeps the portal view
+  on the **default session** (no custom `partition:` in `webPreferences`), so M0's `wipe()` —
+  `session.defaultSession.clearStorageData/clearCache/clearAuthCache` — still targets the correct
+  session and no change to `wipe.js` is required.
+
+  **Caveat:** if the portal `WebContentsView` is ever given its own session partition (e.g.
+  `partition: 'persist:portal'`), clearing `defaultSession` will **not** wipe that view's
+  cookies/localStorage — they survive the wipe silently. The wipe would report SUCCESS, the cert is
+  gone so the mTLS handshake fails and the app *looks* locked out, but the old portal session persists.
+  In that case `wipe()` must target the partition's session (`session.fromPartition('persist:portal')`).
+  For forward-safety: M3 may accept `wipe(sess = session.defaultSession)` so the caller passes the
+  view's actual session; `wipe()` stays UI-agnostic.
 
 ## Sub-steps (ordered: retire structural risk → core security feature → lock the shell → easy win)
 
@@ -166,21 +178,22 @@ BaseWindow  (title "DTL Secure Browser", app.setName)
 - **Files:**
   - `src/renderer/index.html` + `src/renderer/src/main.js` *(modify)* — repurpose the idle M0 scaffold
     into the **chrome bar**: DTL logo + product name on a thin branded strip (static, no logic).
-  - `src/renderer/assets/logo.svg` *(new)* — placeholder DTL logo (simple wordmark/mark acceptable for
-    a PoC; generate if no brand asset is supplied).
-  - `src/main/config.js` *(modify)* — `PRODUCT_NAME = 'DTL Secure Browser'` (name TBD — open question).
+  - `src/renderer/assets/logo.png` *(copy from `images/logo.png`)* — the real DTL logo already in the
+    repo (`images/logo.png`); copy it into the renderer assets. **Do NOT generate a placeholder and do
+    NOT fetch from internal sites.** First run `ls images/` to confirm the file, then reference it.
+  - `src/main/config.js` *(modify)* — `PRODUCT_NAME = 'DTL App'`.
   - `src/main/window.js` *(modify)* — add `chromeView` `WebContentsView` (loads the local renderer:
     dev → `ELECTRON_RENDERER_URL`, prod → `loadFile(out/renderer/index.html)`, mirroring the M0
     dev/prod branch); update `layout()` to reserve `~48px` for the chrome bar and place the portal
     below it; set the `BaseWindow` title to `PRODUCT_NAME`.
   - `src/main/index.js` *(modify)* — `app.setName(PRODUCT_NAME)` **before** `whenReady`.
-  - `package.json` *(modify)* — add `"productName": "DTL Secure Browser"` (harmless now; electron-builder
+  - `package.json` *(modify)* — add `"productName": "DTL App"` (harmless now; electron-builder
     consumes it in M4).
 - **What it does:** delivers criterion 2 — persistent in-app branding + a window/app identity that
   reads DTL, not Electron.
 - **Verify (VM):** launch → a DTL logo + product name strip sits above the portal, persistent across
-  navigation; window title reads "DTL Secure Browser"; portal still renders `verify=SUCCESS` below
-  the bar; resizing the window keeps the layout (chrome fixed height, portal fills the rest).
+  navigation; window title reads "DTL App"; portal still renders `verify=SUCCESS` below the bar;
+  resizing the window keeps the layout (chrome fixed height, portal fills the rest).
 
 ## Risk assessment
 
@@ -211,14 +224,14 @@ BaseWindow  (title "DTL Secure Browser", app.setName)
 - **Out of scope (unchanged):** no DLP — M1 does **not** block downloads, DevTools-via-portal-content,
   copy/paste, or screenshots (brainstorm H2). "Locked shell" here = removing browser chrome + escape
   shortcuts + off-allow-list navigation, **not** content-level DLP.
-- Branding assets are placeholders; no secrets introduced. The chrome view loads only **local** content.
+- Branding asset is `images/logo.png` (real DTL logo already in the repo); no secrets introduced. The chrome view loads only **local** content.
 
 ## Definition of Done (mirrors roadmap M1)
 
 - [ ] **DoD-1** — App launches straight to `HOME_URL` in a locked window: **no** address bar, tabs,
   bookmarks, history menu, or application menu; DevTools + reload/back shortcuts disabled in a prod build.
 - [ ] **DoD-2** — DTL branding visible (logo + product name); window title + `app.setName` read
-  "DTL Secure Browser", not "Electron". *(OS icon / `.desktop` deferred to M4.)*
+  "DTL App", not "Electron". *(OS icon / `.desktop` deferred to M4.)*
 - [ ] **DoD-3** — Allow-listed navigation succeeds in the **same window**; navigation **and** redirect
   **and** `window.open` to a non-allow-listed host are **blocked** and logged (default-deny).
 - [ ] **DoD-4** — Renderer lockdown intact on both views (`contextIsolation`/`sandbox`/
@@ -236,23 +249,23 @@ BaseWindow  (title "DTL Secure Browser", app.setName)
 - On M1 sign-off, write the detailed **M2 (OIDC, system browser + PKCE)** plan — gated, one milestone
   at a time.
 
-## Open questions (flagged — not guessed)
+## Decisions (resolved before implementation, 2026-06-26)
 
-1. **`NAV_ALLOWLIST` format/contents.** Recommend a `host:port` set (matching `MTLS_ALLOWLIST`),
-   PoC value `['localhost:8443']`. Confirm: host-only vs scheme/path-aware? Should it be a *superset*
-   that includes `MTLS_ALLOWLIST`, or fully independent? (Plan assumes independent, host:port.)
-2. **Home URL target for the PoC.** Recommend keeping the **self-contained M0 fixture** (`:8443`) as
-   `HOME_URL` — a real `.dtl` portal is HTTP-only *and* unreachable from the VM without NetBird. Confirm
-   we are not expected to point M1 at a live internal portal.
-3. **Branding approach + logo asset.** Plan recommends a **persistent chrome bar** (drives the
-   `BaseWindow` + `WebContentsView` choice). Confirm that vs a minimal title-only/splash approach
-   (which would allow staying on `BrowserWindow`). Also: is there a real **DTL logo asset**, or is a
-   generated placeholder acceptable for the PoC? And the exact **product name** ("DTL Secure Browser"?).
-4. **`BaseWindow` vs `BrowserWindow` final call.** Recommendation is `BaseWindow` + `WebContentsView`
-   (reasoning above; reversible). Flagging for explicit sign-off since techstack marks it reversible
-   and M0 used plain `BrowserWindow`.
-5. **"Kiosk" = locked normal window vs forced fullscreen (`kiosk:true`).** Plan assumes a **normal,
-   resizable, locked** window (brainstorm C3 = "just a window showing the portal"), not OS fullscreen
-   kiosk mode. Confirm fullscreen lock is **not** required for the PoC.
-6. **`window.open` / `target="_blank"` to an allow-listed host.** Plan loads it **in the same view**
-   (no new window) to honour C3. Confirm that's the desired behaviour vs silently dropping it.
+1. **`NAV_ALLOWLIST` format.** `host:port` form, **independent** of `MTLS_ALLOWLIST` ("may navigate
+   here" ≠ "present a cert here"). PoC value `['localhost:8443']`. `:8444` is deliberately kept **out**
+   of `NAV_ALLOWLIST` — it is the blocked-target for the default-deny test.
+2. **Home URL.** Keep the self-contained M0 fixture (`https://localhost:8443`) as `HOME_URL`. Not
+   pointing at a live `.dtl` portal (HTTP-only + unreachable from the VM without NetBird).
+3. **Branding.** Product name = **"DTL App"** (window title + `app.setName` + `productName` in
+   `package.json`). Logo: a real asset already exists at `images/logo.png` in the repo — Step 4
+   copies/references it into the renderer. **Do not generate a placeholder; do not fetch from internal
+   sites.** Run `ls images/` first to confirm, then use it.
+4. **Embedding.** `BaseWindow` + `WebContentsView` **confirmed**. Window construction stays isolated in
+   `src/main/window.js` so reverting to `BrowserWindow` remains a one-file change.
+5. **Kiosk style.** **Locked normal window** only — remove browser chrome + escape shortcuts. **Do NOT
+   use `kiosk: true`** (forced fullscreen): no MDM (brainstorm A3) and the PoC needs to stay
+   debuggable. Note: `kiosk: true` is a trivial later add for dedicated machines; it requires no
+   architectural change.
+6. **Pop-ups / `window.open` to an allow-listed host.** Load in the **same view** (honour brainstorm
+   C3 same-window navigation); deny all real new windows/tabs via `setWindowOpenHandler` returning
+   `{ action: 'deny' }` after loading the URL in-view if allow-listed.
