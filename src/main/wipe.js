@@ -9,6 +9,7 @@ function runCertutil(args) {
     const proc = spawn('certutil', args, { stdio: 'pipe' })
     let stderr = ''
     proc.stderr.on('data', (d) => { stderr += d.toString() })
+    proc.on('error', reject)
     proc.on('close', (code) => {
       if (code === 0) resolve()
       else reject(new Error(`certutil exited ${code}: ${stderr.trim()}`))
