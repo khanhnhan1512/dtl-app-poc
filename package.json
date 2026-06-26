@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "preview": "electron-vite preview"
+    "preview": "electron-vite preview",
+    "wipe": "electron-vite build && electron . --wipe"
   },
   "devDependencies": {
     "electron": "^42.0.0",
