@@ -19,11 +19,18 @@ function createWindow() {
     }
   })
 
+  win.once('ready-to-show', () => win.show())
+
   win.loadURL(TARGET_URL)
 
   win.webContents.on('did-finish-load', () => {
     win.show()
     if (process.argv.includes('--quit-after-load')) app.quit()
+  })
+
+  win.webContents.on('did-fail-load', (_e, errorCode, errorDescription, validatedURL) => {
+    console.error(`[load] FAILED ${errorCode} ${errorDescription} url=${validatedURL}`)
+    win.show()
   })
 }
 

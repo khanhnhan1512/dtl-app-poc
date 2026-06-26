@@ -1,9 +1,18 @@
 import { MTLS_ALLOWLIST, CERT_SUBJECT_CN } from './config.js'
 
+function extractHost(u) {
+  try {
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) return new URL(u).host
+    return new URL(`https://${u}`).host
+  } catch { return '' }
+}
+
 export function handleCertSelect(event, _webContents, url, certificateList, callback) {
   event.preventDefault()
 
-  const host = new URL(url).host
+  console.log('[cert-select] raw url =', JSON.stringify(url))
+  const host = extractHost(url)
+  console.log('[cert-select] parsed host =', JSON.stringify(host))
 
   if (!MTLS_ALLOWLIST.includes(host)) {
     console.log(`[cert-select] DECLINED — ${host} not in allowlist`)
