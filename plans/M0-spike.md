@@ -206,7 +206,16 @@ OIDC, and the management backend are explicitly **out of M0** — they are later
   docker. The nginx mTLS test server runs as a throwaway `podman run -d ... nginx:alpine` container
   binding to `localhost:8443` and `:8444`. The `podman` CLI is largely docker-compatible. Recorded in
   `CLAUDE.md` under "Environment & gotchas."
-- **GUI render check → `xvfb-run`.** `dshell` is headless. Electron GUI tests run under
-  `xvfb-run -a`. TLS handshake verification (curl-level) is display-independent and works without
-  xvfb-run; only the "window renders" check requires it. Use `--quit-after-load` flag in main to
-  allow the app to self-terminate in headless test runs.
+- **GUI render check → dedicated Ubuntu desktop VM via NoMachine.** Originally planned for
+  `xvfb-run`, but it does NOT work in `dshell`: Chromium 130+ makes a logind D-Bus check fatal
+  (SIGTRAP) even with a virtual display. GUI/launch verification (Steps 1, 3–5) runs on a
+  sysadmin-provided Ubuntu desktop VM via NoMachine — code is built/pushed from dshell and pulled
+  onto the VM. curl-level TLS checks (Step 2) stay display-independent and run anywhere.
+
+## Working assumptions (pending confirmation)
+
+- **mTLS = device identity (decision D3) — assumed, not yet confirmed.** Working split: the custom
+  authentication mechanism (M2) verifies the *user*; mTLS verifies the *machine* via a device-bound
+  client certificate. M0 is built on this device-level interpretation. A confirmation question has
+  been sent to the task owner but not yet answered — if the intended meaning differs, M0's
+  "cert = device identity" premise may need revisiting.

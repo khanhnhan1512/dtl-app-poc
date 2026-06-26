@@ -15,7 +15,11 @@ function createWindow() {
     }
   })
 
-  win.loadFile(join(__dirname, '../renderer/index.html'))
+  if (process.env.ELECTRON_RENDERER_URL) {
+    win.loadURL(process.env.ELECTRON_RENDERER_URL)
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html'))
+  }
 
   win.webContents.on('did-finish-load', () => {
     win.show()
