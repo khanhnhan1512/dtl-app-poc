@@ -1,5 +1,9 @@
 import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
+import { handleCertSelect } from './cert-select.js'
+import { TARGET_URL } from './config.js'
+
+app.on('select-client-certificate', handleCertSelect)
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -15,18 +19,11 @@ function createWindow() {
     }
   })
 
-  if (process.env.ELECTRON_RENDERER_URL) {
-    win.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+  win.loadURL(TARGET_URL)
 
   win.webContents.on('did-finish-load', () => {
     win.show()
-    // Auto-quit for headless/CI test runs (xvfb-run verification)
-    if (process.argv.includes('--quit-after-load')) {
-      app.quit()
-    }
+    if (process.argv.includes('--quit-after-load')) app.quit()
   })
 }
 
