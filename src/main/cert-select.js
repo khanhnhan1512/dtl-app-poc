@@ -1,11 +1,5 @@
 import { MTLS_ALLOWLIST, CERT_SUBJECT_CN } from './config.js'
-
-function extractHost(u) {
-  try {
-    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) return new URL(u).host
-    return new URL(`https://${u}`).host
-  } catch { return '' }
-}
+import { extractHost } from './allowlist.js'
 
 export function handleCertSelect(event, _webContents, url, certificateList, callback) {
   event.preventDefault()

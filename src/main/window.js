@@ -1,6 +1,7 @@
 import { BaseWindow, WebContentsView } from 'electron'
 import { join } from 'path'
 import { HOME_URL } from './config.js'
+import { applyNavigationLockdown } from './navigation.js'
 
 export function createShell() {
   const win = new BaseWindow({ width: 1280, height: 800, title: 'DTL App' })
@@ -16,6 +17,7 @@ export function createShell() {
   })
 
   win.contentView.addChildView(portalView)
+  applyNavigationLockdown(portalView.webContents)
 
   function layout() {
     const { width, height } = win.getContentBounds()
