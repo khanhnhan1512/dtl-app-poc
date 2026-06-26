@@ -181,18 +181,18 @@ OIDC, and the management backend are explicitly **out of M0** — they are later
 
 ## Definition of Done (mirrors roadmap M0)
 
-- [ ] **DoD-1** — Electron loads `https://localhost:8443`; handler presents `CN=DTL-Ubuntu-Test-Device`
+- [x] **DoD-1** — Electron loads `https://localhost:8443`; handler presents `CN=DTL-Ubuntu-Test-Device`
   **only** for the designated host; handshake succeeds (`verify=SUCCESS`).
-- [ ] **DoD-2** — Non-designated host (`:8444`) gets **no** cert (`callback()` empty) → `verify=NONE`.
-- [ ] **DoD-3** — `wipe()` deletes cert+key from NSS via
+- [x] **DoD-2** — Non-designated host (`:8444`) gets **no** cert (`callback()` empty) → `verify=NONE`.
+- [x] **DoD-3** — `wipe()` deletes cert+key from NSS via
   `certutil -F -n DTL-Ubuntu-Test-Device -d sql:$HOME/.pki/nssdb` **and** clears Electron session
   data; `certutil -L` **and** `-K` confirm both gone.
-- [ ] **DoD-4** — After wipe + relaunch, `:8443` handshake **fails** (locked out) — proves the wipe is
+- [x] **DoD-4** — After wipe + relaunch, `:8443` handshake **fails** (locked out) — proves the wipe is
   real, not just cleared cookies.
-- [ ] **DoD-5** — `lab/reprovision-cert.sh` restores cert+key (`pk12util -i`) and access returns —
+- [x] **DoD-5** — `lab/reprovision-cert.sh` restores cert+key (`pk12util -i`) and access returns —
   confirms the manual D4 recovery path.
-- [ ] `wipe()` is a single **reusable, UI-agnostic** module importable by M3.
-- [ ] **No `app.importCertificate` anywhere**; all cert ops via `certutil` / `pk12util` in Main.
+- [x] `wipe()` is a single **reusable, UI-agnostic** module importable by M3.
+- [x] **No `app.importCertificate` anywhere**; all cert ops via `certutil` / `pk12util` in Main.
 
 ## Next steps (after approval)
 
