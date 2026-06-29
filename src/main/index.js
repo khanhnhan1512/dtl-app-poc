@@ -1,7 +1,11 @@
-import { app } from 'electron'
+import { app, Menu } from 'electron'
 import { handleCertSelect } from './cert-select.js'
 import { wipe } from './wipe.js'
 import { createShell } from './window.js'
+
+if (process.env.NODE_ENV !== 'development') {
+  Menu.setApplicationMenu(null)
+}
 
 app.on('select-client-certificate', handleCertSelect)
 
