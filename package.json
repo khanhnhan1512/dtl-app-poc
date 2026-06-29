@@ -1,6 +1,7 @@
 {
   "name": "dtl-app",
   "version": "0.0.1",
+  "productName": "DTL App",
   "description": "DTL managed enterprise browser PoC",
   "main": "./out/main/index.js",
   "scripts": {

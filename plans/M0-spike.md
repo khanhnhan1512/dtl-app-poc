@@ -212,10 +212,11 @@ OIDC, and the management backend are explicitly **out of M0** — they are later
   sysadmin-provided Ubuntu desktop VM via NoMachine — code is built/pushed from dshell and pulled
   onto the VM. curl-level TLS checks (Step 2) stay display-independent and run anywhere.
 
-## Working assumptions (pending confirmation)
+## Working assumptions
 
-- **mTLS = device identity (decision D3) — assumed, not yet confirmed.** Working split: the custom
-  authentication mechanism (M2) verifies the *user*; mTLS verifies the *machine* via a device-bound
-  client certificate. M0 is built on this device-level interpretation. A confirmation question has
-  been sent to the task owner but not yet answered — if the intended meaning differs, M0's
-  "cert = device identity" premise may need revisiting.
+- **mTLS = client/app identity (decision D3) — confirmed 2026-06-29.** mTLS verifies the *client*
+  (Electron app instance), not the user — the user is verified separately by OIDC (M2). The client
+  cert is scoped to an app install and carries an expiry; whether that maps to a "device" or an
+  "install" is a deployment detail the PoC does not need to settle. The purpose of M0 is to
+  demonstrate that per-domain mTLS selection and cert wipe are mechanically achievable in Electron on
+  Ubuntu. The device-vs-install semantic is not the crux.

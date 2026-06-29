@@ -2,11 +2,39 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DTL App</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; overflow: hidden; }
+      #chrome-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 100%;
+        padding: 0 16px;
+        background: #1a2332;
+        user-select: none;
+        -webkit-app-region: drag;
+      }
+      #chrome-bar img {
+        height: 28px;
+        width: auto;
+        display: block;
+      }
+      #chrome-bar span {
+        color: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+    </style>
   </head>
   <body>
-    <p>DTL App PoC — M0 Spike</p>
+    <div id="chrome-bar">
+      <img id="logo" alt="DTL" />
+      <span>DTL App</span>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

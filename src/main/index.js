@@ -2,6 +2,9 @@ import { app, Menu } from 'electron'
 import { handleCertSelect } from './cert-select.js'
 import { wipe } from './wipe.js'
 import { createShell } from './window.js'
+import { PRODUCT_NAME } from './config.js'
+
+app.setName(PRODUCT_NAME)
 
 if (process.env.NODE_ENV !== 'development') {
   Menu.setApplicationMenu(null)

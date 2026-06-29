@@ -58,6 +58,11 @@ the mock backend + signed kill (M3), and OS-level packaging/branding (M4) are ex
   in a "production" build. Until M4 packaging, `app.isPackaged` is always false, so gate on
   **`process.env.NODE_ENV === 'development'`** (electron-vite sets it) — verify the locked behaviour
   with `npm run build && electron .`, not `npm run dev`.
+- **`BaseWindow` Reload accelerator is a no-op (known characteristic):** unlike `BrowserWindow`,
+  `BaseWindow` has no own `webContents`, so the default menu "Reload" item (and its accelerator) does
+  nothing — `reload()` must be called directly on a view's `webContents`. In dev, `Ctrl+R` / `F5` are
+  wired to `portalView.webContents.reload()` via `before-input-event` as a convenience. In production
+  this is intentional: no reload. (Relevant for future Windows / macOS work on the same architecture.)
 - **No new runtime deps.** M1 is standard Electron API only (KISS) — no new npm packages.
 
 ## Architecture (M1 shape)
