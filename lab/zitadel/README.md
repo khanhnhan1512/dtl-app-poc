@@ -145,18 +145,25 @@ Open **http://127.0.0.1:8090/ui/console** in the browser on this machine.
 
 ---
 
-## Record these values (needed for M2 Step 2 Electron config)
+## Record these values (M2 Step 2 Electron config — already baked in)
 
-Fill in after completing the web UI steps above:
+These values are baked into `src/main/config.js` (all env-overridable via `DTL_OIDC_*`).
+Recorded here for reference; no manual copy needed unless changing the lab setup.
 
 ```
 ISSUER_URL=http://127.0.0.1:8090
-CLIENT_ID=<paste from Step 4>          # already baked in: 379679934110564995
-ORG_ID=<default org ID from Step 2>    # already baked in: 379670152104444547
+CLIENT_ID=379679934110564995          # native PKCE app "dtl-electron" in the default Zitadel org
+ORG=ZITADEL (default org, id 379670152104444547)
 CALLBACK_PORT=51234
 TEST_USER_EMAIL=testuser@dtl.local
 TEST_USER_PASSWORD=Test1234!
 ```
+
+> **Auth against the DEFAULT org:** we do NOT create a separate "DTL-PoC" org. The `dtl-electron` app
+> lives in the default "ZITADEL" org (id `379670152104444547`). Org scoping is enforced at Zitadel
+> (the client belongs to that org); the Electron Main-process claim check uses **email domain**
+> (`email_verified === true` AND `email` ends with `@dtl.local`), NOT org-id — the org-id claim is
+> absent for normal users and the scope that surfaces it hangs the v2 login page.
 
 ---
 

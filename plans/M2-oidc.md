@@ -234,9 +234,9 @@ grow a third clause, keeping it **UI-agnostic and reusable** (M3 calls the same 
 - **Loopback** binds `127.0.0.1`, ephemeral, **closes after one capture**, and rejects any callback whose
   `state` doesn't match.
 - **Company-account restriction** enforced in **two places:** Zitadel org/project scoping (primary) +
-  a post-exchange **claim check** in Main (defense in depth) on a **configurable claim** (org id; the
-  email-domain check is the prod path via Google hosted-domain, out of scope here). Exact claim value
-  firmed up when the org/user are created in Step 1 (Decision 6).
+  a post-exchange **email-domain claim check** in Main (defense in depth): `email_verified === true`
+  AND `email` ends with `@dtl.local` (env-overridable; prod = `@dytechlab.com`). No special Zitadel
+  scope required — `email` and `email_verified` are present in standard userinfo (Decision 6).
 - **Independent layers (E2):** M2 does **not** modify the M0 cert handler or weaken any M1 lockdown;
   both views keep `contextIsolation`/`sandbox`/`nodeIntegration:false`/`webviewTag:false`; `webSecurity`
   never disabled.
@@ -287,9 +287,13 @@ grow a third clause, keeping it **UI-agnostic and reusable** (M3 calls the same 
 5. **Zitadel client (per-machine; user provisions manually; documented in `lab/zitadel/README.md`).**
    A **public/native PKCE app (no secret)**, redirect `http://127.0.0.1:<port>/callback`, scopes
    `openid profile email offline_access`, one org/project + one test user.
-6. **Company-account restriction — Zitadel org scoping (primary) + a Main-process claim check on a
-   configurable claim** (org id). The email-domain check is the **prod path** via Google hosted-domain
-   (out of scope here). The exact claim value is firmed up when the org/user are created in Step 1.
+6. **Company-account restriction — Zitadel org/project scoping (primary) + a Main-process email-domain
+   claim check (defense in depth).** Implemented check: `email_verified === true` AND `email` ends with
+   `@dtl.local` (env-overridable via `DTL_OIDC_ALLOWED_EMAIL_DOMAIN`; prod path = `@dytechlab.com`).
+   Org-id claim (`urn:zitadel:iam:user:resourceowner:id`) was NOT used — it is absent for normal
+   (non-admin) users, and the scope that surfaces it (`urn:zitadel:iam:user:resourceowner`) causes
+   the Zitadel v2 login page to hang. Email-domain check is the "prod path" from the original
+   Decision 6; the org-id path is superseded.
 7. **Token refresh — lazy** (on launch + on expiry); **no** proactive pre-expiry timer. KISS.
 8. **`safeStorage` backend — verify-on-machine, not a design choice.** Log
    `getSelectedStorageBackend()` at startup (Steps 2/3); verify real encryption where a keyring is
