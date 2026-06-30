@@ -29,12 +29,13 @@ mock backend + signed kill (M3) and OS packaging (M4) are explicitly **out of M2
 
 ## How M2 composes with M0/M1 (the explicit "do they interact?" answer)
 
-- **Sequencing — login GATES the portal (recommended).** Roadmap criterion 4 ("no valid token ⇒ no
-  portal") settles this: `createShell()` must not navigate `portalView` to `HOME_URL` until a valid
-  access token exists. Recommendation: on `whenReady`, run an **auth gate** *before* loading the portal;
-  show a minimal local "Sign in / Signing in…" state in the **existing M1 chrome renderer** (reuse, no
-  new window) while the browser flow runs. *(Whether to auto-open the browser immediately vs. show a
-  "Sign in with DTL" button first is a UX/product call — see Open Questions.)*
+- **Sequencing — login GATES the portal (confirmed — Decision 3).** Roadmap criterion 4 ("no valid
+  token ⇒ no portal") settles this: `createShell()` must not navigate `portalView` to `HOME_URL` until a
+  valid access token exists. On `whenReady`, run an **auth gate** *before* loading the portal; show a
+  minimal **"Sign in with DTL" gate screen** in the **existing M1 chrome renderer** (reuse, no new
+  window). The user clicks it to start the flow — the app does **not** auto-open the browser on launch
+  (Decision 4). A persistent auth/identity indicator is **deferred to M3** (with the managed-by-DTL /
+  kill-switch status).
 - **Technically independent (brutal-honesty flag).** OIDC runs entirely in the **system browser +
   loopback**, touching **no Electron session**. The mTLS cert is selected at the TLS layer by the M0
   `select-client-certificate` handler whenever `portalView` connects to `:8443` — **regardless** of
@@ -57,7 +58,8 @@ mock backend + signed kill (M3) and OS packaging (M4) are explicitly **out of M2
   / `kwallet` on a desktop with an **unlocked keyring**, but `basic_text` (effectively plaintext) when
   no secret service is available (headless, or a VM with no/locked keyring). The PoC accepts `basic_text`
   as a *documented limitation* but must **log the backend loudly** and verify real encryption on a
-  desktop with a keyring. *(Open question: does the NoMachine VM have an unlocked keyring?)*
+  desktop with a keyring. *(Whether the NoMachine VM has an unlocked keyring is a **verify-on-machine**
+  item — Decision 8 — not a design choice.)*
 - **Loopback must bind IPv4 `127.0.0.1` explicitly**, and `redirect_uri` must use the literal
   `127.0.0.1` host (not `localhost`). This sidesteps the `localhost`→`::1` (IPv6) resolution mismatch
   we hit under WSL: if the listener binds IPv4 but the browser resolves `localhost` to `::1`, the
@@ -65,9 +67,10 @@ mock backend + signed kill (M3) and OS packaging (M4) are explicitly **out of M2
 - **Issuer consistency (Zitadel gotcha):** Zitadel's `ExternalDomain`/issuer must match the URL the app
   uses for discovery, or token `iss` validation fails. Pin one issuer URL and use it everywhere
   (discovery, auth, token, validation).
-- **`openid-client` is ESM and would be the project's first runtime dependency.** electron-vite
-  externalizes node deps from the main bundle by default; confirm it resolves at runtime (not inlined).
-  This is a genuine departure from the minimal-deps stance — see the library decision below.
+- **`openid-client` is ESM and is the project's first runtime dependency (approved — Decision 2).**
+  electron-vite externalizes node deps from the main bundle by default; confirm it resolves at runtime
+  (not inlined) and **pin a version** (R4). A deliberate, signed-off departure from the minimal-deps
+  stance — hand-rolling token validation would be the inverse over-engineering trap for security code.
 - **No new renderer privilege.** The preload stays empty; tokens never cross IPC to the renderer. The
   auth gate UI only needs *status* (a string/enum), never the tokens themselves.
 
@@ -109,7 +112,7 @@ app.whenReady()
 **Session-partition decision (resolves the M1 caveat for M2):** **keep the portal on the
 `defaultSession`** (no `partition:`). OIDC tokens live in **`safeStorage` files**, not in any Electron
 session, and the system-browser flow touches no session — so introducing a partition buys nothing and
-would force `wipe()` to target it. Recommendation: **no partition in M2**; M0's `wipe()` session
+would force `wipe()` to target it. **Decision 9 — no partition in M2**; M0's `wipe()` session
 targeting stays correct. *(If a partition is ever added, `wipe()` must clear
 `session.fromPartition(...)` too — the M1 caveat.)*
 
@@ -178,8 +181,9 @@ grow a third clause, keeping it **UI-agnostic and reusable** (M3 calls the same 
 
 - **Files:** `src/main/index.js` *(modify — `ensureAuthenticated()` before `createShell()`)*,
   `src/main/window.js` *(modify — load portal only when authenticated; surface a status string to the
-  chrome renderer)*, `src/renderer/*` *(modify — minimal "Sign in / Signing in… / Signed in" gate
-  state; reuses the M1 chrome renderer, no tokens cross IPC)*.
+  chrome renderer)*, `src/renderer/*` *(modify — minimal **"Sign in with DTL"** gate screen with
+  "Signing in… / Signed in" states; user clicks to start (no auto-open); reuses the M1 chrome renderer,
+  no tokens cross IPC; persistent identity indicator deferred to M3 — Decision 4)*.
 - **What it does:** wires the pieces: valid token ⇒ portal loads; no token ⇒ browser login then portal;
   refresh-failure ⇒ forced re-auth; **no valid token ⇒ no portal** (criterion 4). Login gates launch.
 - **Verify (VM):** cold start with no tokens → login → portal renders `verify=SUCCESS …
@@ -230,7 +234,9 @@ grow a third clause, keeping it **UI-agnostic and reusable** (M3 calls the same 
 - **Loopback** binds `127.0.0.1`, ephemeral, **closes after one capture**, and rejects any callback whose
   `state` doesn't match.
 - **Company-account restriction** enforced in **two places:** Zitadel org/project scoping (primary) +
-  a post-exchange **claim check** in Main (defense in depth). Exact claim TBD (Open Questions).
+  a post-exchange **claim check** in Main (defense in depth) on a **configurable claim** (org id; the
+  email-domain check is the prod path via Google hosted-domain, out of scope here). Exact claim value
+  firmed up when the org/user are created in Step 1 (Decision 6).
 - **Independent layers (E2):** M2 does **not** modify the M0 cert handler or weaken any M1 lockdown;
   both views keep `contextIsolation`/`sandbox`/`nodeIntegration:false`/`webviewTag:false`; `webSecurity`
   never disabled.
@@ -261,31 +267,37 @@ grow a third clause, keeping it **UI-agnostic and reusable** (M3 calls the same 
 - On M2 sign-off, write the detailed **M3 (mock backend + signed Ed25519 kill switch)** plan — gated,
   one milestone at a time. M3 reuses this `wipe()` (now token-aware) behind the signed kill.
 
-## Open questions (genuinely unresolved — to resolve before implementation)
+## Decisions (resolved before implementation, 2026-06-29)
 
-1. **Redirect mechanism.** Loopback `127.0.0.1` listener (recommended; RFC 8252; sidesteps WSL IPv6) vs
-   a custom URL scheme (`dtlapp://`). Confirm loopback for M2; custom scheme is a reversible later add
-   (needs OS registration, awkward before M4 packaging).
-2. **Library vs hand-roll.** `openid-client` (recommended — handles discovery, PKCE, JWKS, refresh,
-   validation; would be the **first runtime dep**) vs hand-rolling PKCE against the project's
-   minimal-deps stance. Recommendation: take the dep — hand-rolling token validation is the *inverse*
-   over-engineering trap for security-critical code. Needs explicit sign-off.
-3. **Does login gate the portal in the PoC?** Recommended **yes** ("no token ⇒ no portal"). Confirm.
-4. **Pre-auth UI surface.** Auto-open the browser on start vs a local "Sign in with DTL" gate screen in
-   the chrome renderer; and **whether any persistent auth/identity indicator belongs in M2 or is
-   deferred to M3** (alongside the "managed by DTL" / kill-switch status).
-5. **Exact Zitadel client config (per-machine).** Public/native PKCE app (no secret), redirect URIs,
-   scopes (incl. `offline_access` for refresh), org/project, test user(s) — and **who provisions it on
-   each dev box**.
-6. **Company-account restriction claim.** Which claim/value enforces it — email domain
-   (`@dytechlab.com`?), Zitadel **org id**, or a **role** claim? Depends on the Step-1 Zitadel setup.
-7. **Token refresh strategy.** Lazy on-demand + on-launch (recommended, KISS) vs a proactive pre-expiry
-   timer. Acceptable for the PoC?
-8. **`safeStorage` on the NoMachine VM.** Is a secret service / keyring available **and unlocked** there,
-   or will it also fall back to `basic_text`? Determines whether DoD-3's *encryption* can be truly
-   verified on the VM or needs a different desktop.
-9. **Session partition.** Recommendation is to keep the portal on `defaultSession` (so `wipe()` stays
-   simple). Confirm — it changes the wipe targeting if reversed.
-10. **Token "use" in the PoC.** The access token gates launch and is stored/wiped but, per E3, is **not**
-    presented to the `:8443` fixture. Confirm that demonstrating login + secure storage + wipe is the
-    intended M2 value (not token-authorized resource access).
+> The pre-implementation open questions are now **resolved**. Recorded here so implementation does not
+> re-litigate them; each maps to the architecture / steps above.
+
+1. **Redirect mechanism — loopback `127.0.0.1` listener.** RFC 8252; sidesteps the WSL `localhost`→`::1`
+   IPv6 mismatch. A custom URL scheme (`dtlapp://`) is **deferred to post-M4** (needs OS registration,
+   awkward before packaging) and stays a reversible later add.
+2. **Library — use `openid-client` (approved as the first runtime dependency; no dependency
+   restriction).** It handles discovery, PKCE, JWKS validation, and refresh. Hand-rolling token
+   validation is **rejected** as the inverse over-engineering trap for security-critical code. **R4
+   still applies:** externalize it correctly in the electron-vite **Main** build and **pin a version**.
+3. **Login GATES the portal.** `createShell()` must **not** load `HOME_URL` until a valid token exists —
+   **no token ⇒ no portal** (roadmap criterion 4).
+4. **Pre-auth UI — a minimal "Sign in with DTL" gate screen in the M1 chrome renderer** (the user clicks
+   to start; the app does **not** auto-open the browser on launch). A persistent auth/identity indicator
+   is **deferred to M3** (with the managed-by-DTL / kill-switch status).
+5. **Zitadel client (per-machine; user provisions manually; documented in `lab/zitadel/README.md`).**
+   A **public/native PKCE app (no secret)**, redirect `http://127.0.0.1:<port>/callback`, scopes
+   `openid profile email offline_access`, one org/project + one test user.
+6. **Company-account restriction — Zitadel org scoping (primary) + a Main-process claim check on a
+   configurable claim** (org id). The email-domain check is the **prod path** via Google hosted-domain
+   (out of scope here). The exact claim value is firmed up when the org/user are created in Step 1.
+7. **Token refresh — lazy** (on launch + on expiry); **no** proactive pre-expiry timer. KISS.
+8. **`safeStorage` backend — verify-on-machine, not a design choice.** Log
+   `getSelectedStorageBackend()` at startup (Steps 2/3); verify real encryption where a keyring is
+   available; document the `basic_text` fallback as a known PoC limitation (F4 tamper already accepted).
+9. **Session partition — keep the portal on `defaultSession` (no partition).** Tokens live in
+   `safeStorage` files, not an Electron session, so a partition buys nothing and would complicate
+   `wipe()`. *(If ever added, `wipe()` must target that session — the M1 caveat.)*
+10. **Token "use" in the PoC — token gates launch + is stored + is wiped, but is NOT presented to the
+    `:8443` fixture** (per E3). M2's demonstrated value is **login + secure storage + wipe**, not
+    token-authorized resource access — aligned with "show we can customize; the actual feature does not
+    matter."

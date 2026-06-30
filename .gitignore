@@ -1,6 +1,6 @@
 # Claude files
 # CLAUDE.md
-# .claude/
+.claude/
 
 /package_docs
 /storage
@@ -225,3 +225,20 @@ cache/*
 # Extension dir
 node_modules/
 dist/
+
+# Electron / electron-vite build output
+out/
+*.local
+
+# Lab generated secrets — NEVER commit private keys or certs
+lab/certs/*.key
+lab/certs/*.crt
+lab/certs/*.pem
+lab/certs/*.p12
+lab/certs/*.srl
+lab/certs/*.csr
+
+# Zitadel lab — generated state and any future per-machine secrets
+lab/zitadel/data/
+lab/zitadel/.env
+lab/zitadel/secrets/

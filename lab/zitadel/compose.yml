@@ -1,0 +1,63 @@
+version: '3.8'
+# lab/zitadel/compose.yml — Minimal local Zitadel IdP for M2 OIDC PoC.
+# Per-machine — NOT committed to git. See README.md for run order + manual steps.
+#
+# Pinned issuer: http://127.0.0.1:8080  (ExternalSecure=false, no TLS)
+# Throwaway local creds documented in README.md — NOT real secrets.
+#
+# Rootless podman note: named volumes are used (not bind mounts) to avoid
+# subuid/subgid permission issues. If `podman compose` is unavailable, install
+# `podman-compose` (pip install podman-compose) and use that instead.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: rootpassword
+    volumes:
+      - zitadel-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  zitadel:
+    image: ghcr.io/zitadel/zitadel:latest
+    # start-from-init: initialise DB schema on first boot, then serve.
+    # --masterkeyFromEnv: read ZITADEL_MASTERKEY from environment.
+    # --tlsMode disabled: serve plain HTTP (ExternalSecure=false).
+    command: start-from-init --masterkeyFromEnv --tlsMode disabled
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      # --- Database (admin=root creates zitadel DB + zitadel user on init) ---
+      ZITADEL_DATABASE_POSTGRES_HOST: db
+      ZITADEL_DATABASE_POSTGRES_PORT: 5432
+      ZITADEL_DATABASE_POSTGRES_DATABASE: zitadel
+      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: zitadel
+      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: zitadel
+      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
+      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: root
+      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: rootpassword
+      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
+      # --- Issuer (MUST match what the Electron app uses for discovery) ---
+      ZITADEL_EXTERNALDOMAIN: "127.0.0.1"
+      ZITADEL_EXTERNALPORT: "8080"
+      ZITADEL_EXTERNALSECURE: "false"
+      # --- Master key: exactly 32 ASCII chars — throwaway local value ---
+      ZITADEL_MASTERKEY: "MasterkeyNeedsToHave32Characters"
+      # --- First-boot admin user (only applied on the very first start-from-init) ---
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: "admin"
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_ADDRESS: "admin@localhost.local"
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_VERIFIED: "true"
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: "Admin1!"
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD_CHANGE_REQUIRED: "false"
+
+volumes:
+  zitadel-db:
