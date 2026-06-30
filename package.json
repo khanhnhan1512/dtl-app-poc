@@ -10,6 +10,9 @@
     "preview": "electron-vite preview",
     "wipe": "electron-vite build && electron . --wipe"
   },
+  "dependencies": {
+    "openid-client": "5.7.1"
+  },
   "devDependencies": {
     "electron": "^42.0.0",
     "electron-vite": "^2.0.0"

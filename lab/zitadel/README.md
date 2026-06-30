@@ -116,13 +116,14 @@ Open **http://127.0.0.1:8090/ui/console** in the browser on this machine.
 - Username: `admin@localhost.local` (try just `admin` if that fails)
 - Password: `Admin12345!`
 
-**Step 2 — Create an organisation**
-- Top-left menu → **Organizations** → **New organization**
-- Name: `DTL-PoC`
-- Click **Create** — note the **Org ID** (UUID shown in the org settings or URL).
+**Step 2 — Identify the default organisation**
+- Top-left menu → **Organizations** — there is already a default org (usually named **ZITADEL** or
+  **Default-Organisation**). Do NOT create a new org; use this existing one.
+- Click the default org → **Settings** (gear icon) — note the **Org ID** (UUID in the URL or the
+  settings page). This should be `379670152104444547`.
 
 **Step 3 — Create a project**
-- Inside DTL-PoC org → **Projects** → **Create project**
+- While in the default org → **Projects** → **Create project**
 - Name: `DTL App`
 
 **Step 4 — Register the native PKCE app**
@@ -135,7 +136,7 @@ Open **http://127.0.0.1:8090/ui/console** in the browser on this machine.
 - Click **Save** — copy the **Client ID** shown (save it below).
 
 **Step 5 — Create a test user**
-- Top-left → switch to **DTL-PoC** org → **Users** → **New user**
+- Ensure you are in the default org → **Users** → **New user**
 - First name: `Test`, Last name: `User`
 - Username: `testuser`
 - Email: `testuser@dtl.local` → check **Email verified**
@@ -150,8 +151,8 @@ Fill in after completing the web UI steps above:
 
 ```
 ISSUER_URL=http://127.0.0.1:8090
-CLIENT_ID=<paste from Step 4>
-ORG_ID=<paste from Step 2 org settings>
+CLIENT_ID=<paste from Step 4>          # already baked in: 379679934110564995
+ORG_ID=<default org ID from Step 2>    # already baked in: 379670152104444547
 CALLBACK_PORT=51234
 TEST_USER_EMAIL=testuser@dtl.local
 TEST_USER_PASSWORD=Test1234!
