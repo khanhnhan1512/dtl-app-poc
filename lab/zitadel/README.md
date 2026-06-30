@@ -16,6 +16,9 @@ Loopback callback port the Electron app will use: **`51234`**
 > definitive path for this machine. `compose.yml` is kept for machines where compose works.
 > Port 8080 is taken on this VM; Zitadel runs on **8090** here.
 
+> **Image pinning:** Use `v2.71.10` — do NOT use `:latest` (v4 moved the login UI to a separate
+> "Login V2" app; `/ui/console` returns 404 in a single-container setup).
+
 ---
 
 ## BRING UP (this VM — `podman run` path)
@@ -23,7 +26,7 @@ Loopback callback port the Electron app will use: **`51234`**
 ```bash
 # 1. Pull images (once):
 podman pull postgres:16-alpine
-podman pull ghcr.io/zitadel/zitadel:latest
+podman pull ghcr.io/zitadel/zitadel:v2.71.10
 
 # 2. Start Postgres on host network (survives reboots when restarted):
 podman run -d \
@@ -59,7 +62,7 @@ podman run -d \
   -e ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_VERIFIED=true \
   -e "ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD=Admin12345!" \
   -e ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD_CHANGE_REQUIRED=false \
-  ghcr.io/zitadel/zitadel:latest \
+  ghcr.io/zitadel/zitadel:v2.71.10 \
   start-from-init --masterkeyFromEnv --tlsMode disabled --port 8090
 ```
 
@@ -158,13 +161,20 @@ TEST_USER_PASSWORD=Test1234!
 
 ## VERIFY (lab-first gate — no Electron)
 
-Do NOT start M2 Step 2 (Electron OIDC code) until all three pass.
+Do NOT start M2 Step 2 (Electron OIDC code) until all four pass.
 
 ### (a) Discovery endpoint returns the correct issuer
 
 ```bash
 curl -s http://127.0.0.1:8090/.well-known/openid-configuration | python3 -m json.tool | grep '"issuer"'
 # Expected: "issuer": "http://127.0.0.1:8090"
+```
+
+### (a2) Console UI is reachable (NOT 404)
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8090/ui/console
+# Expected: 200 (or 30x redirect to a login page that itself returns 200). 404 = wrong image (v4+).
 ```
 
 ### (b) Zitadel login page loads in the browser
