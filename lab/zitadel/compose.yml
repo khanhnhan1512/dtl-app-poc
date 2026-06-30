@@ -34,7 +34,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8090:8090"
     environment:
       # --- Database (admin=root creates zitadel DB + zitadel user on init) ---
       ZITADEL_DATABASE_POSTGRES_HOST: db
@@ -48,7 +48,7 @@ services:
       ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
       # --- Issuer (MUST match what the Electron app uses for discovery) ---
       ZITADEL_EXTERNALDOMAIN: "127.0.0.1"
-      ZITADEL_EXTERNALPORT: "8080"
+      ZITADEL_EXTERNALPORT: "8090"
       ZITADEL_EXTERNALSECURE: "false"
       # --- Master key: exactly 32 ASCII chars — throwaway local value ---
       ZITADEL_MASTERKEY: "MasterkeyNeedsToHave32Characters"
@@ -56,7 +56,7 @@ services:
       ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: "admin"
       ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_ADDRESS: "admin@localhost.local"
       ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_VERIFIED: "true"
-      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: "Admin1!"
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: "Admin12345!"
       ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD_CHANGE_REQUIRED: "false"
 
 volumes:

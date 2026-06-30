@@ -1,80 +1,122 @@
 # DTL OIDC Lab — Local Zitadel IdP (M2 Step 1)
 
 Per-machine lab infra. **Not committed to git.** Rebuild on each dev box from scratch
-(same discipline as `lab/certs/`). The issuer is pinned to `http://127.0.0.1:8080` — it
+(same discipline as `lab/certs/`). The issuer is pinned to `http://127.0.0.1:8090` — it
 must match the Electron app's `ISSUER_URL` exactly or token `iss` validation fails (R1).
 
 Admin creds (throwaway local only — not real secrets):
 - Username / email: `admin` / `admin@localhost.local`
-- Password: `Admin1!`
+- Password: `Admin12345!`
 
 Loopback callback port the Electron app will use: **`51234`**
 (registered as `http://127.0.0.1:51234/callback` in Zitadel — see Manual steps below).
 
----
-
-## Prerequisites
-
-```bash
-# Check podman
-podman --version           # needs 4.x+
-
-# Try the compose plugin first (preferred):
-podman compose version
-# If "command not found", install the Python script:
-pip install --user podman-compose
-# Then use `podman-compose` instead of `podman compose` in all commands below.
-```
+> **VM-specific note:** `podman compose` fails on this VM due to rootless systemd D-Bus issues
+> (pod cgroups + bridge network routing both fail). The `podman run` commands below are the
+> definitive path for this machine. `compose.yml` is kept for machines where compose works.
+> Port 8080 is taken on this VM; Zitadel runs on **8090** here.
 
 ---
 
-## BRING UP
+## BRING UP (this VM — `podman run` path)
 
 ```bash
-cd ~/Downloads/dtl-app/lab/zitadel
+# 1. Pull images (once):
+podman pull postgres:16-alpine
+podman pull ghcr.io/zitadel/zitadel:latest
 
-# Pull images first (in case the network is slow):
-podman compose pull
+# 2. Start Postgres on host network (survives reboots when restarted):
+podman run -d \
+  --name zitadel-db \
+  --network=host \
+  -e POSTGRES_USER=root \
+  -e POSTGRES_PASSWORD=rootpassword \
+  -v zitadel-db:/var/lib/postgresql/data \
+  postgres:16-alpine
 
-# Start in the background:
-podman compose up -d
+# 3. Wait ~15 s for Postgres to be ready:
+sleep 15 && podman exec zitadel-db pg_isready -U root
+
+# 4. Start Zitadel on host network, port 8090:
+podman run -d \
+  --name zitadel \
+  --network=host \
+  -e ZITADEL_DATABASE_POSTGRES_HOST=127.0.0.1 \
+  -e ZITADEL_DATABASE_POSTGRES_PORT=5432 \
+  -e ZITADEL_DATABASE_POSTGRES_DATABASE=zitadel \
+  -e ZITADEL_DATABASE_POSTGRES_USER_USERNAME=zitadel \
+  -e ZITADEL_DATABASE_POSTGRES_USER_PASSWORD=zitadel \
+  -e ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE=disable \
+  -e ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME=root \
+  -e ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD=rootpassword \
+  -e ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE=disable \
+  -e ZITADEL_EXTERNALDOMAIN=127.0.0.1 \
+  -e ZITADEL_EXTERNALPORT=8090 \
+  -e ZITADEL_EXTERNALSECURE=false \
+  -e "ZITADEL_MASTERKEY=MasterkeyNeedsToHave32Characters" \
+  -e ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME=admin \
+  -e ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_ADDRESS=admin@localhost.local \
+  -e ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_VERIFIED=true \
+  -e "ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD=Admin12345!" \
+  -e ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD_CHANGE_REQUIRED=false \
+  ghcr.io/zitadel/zitadel:latest \
+  start-from-init --masterkeyFromEnv --tlsMode disabled --port 8090
 ```
 
-**Wait for healthy — Zitadel runs DB migrations on first boot (~30–60 s):**
+**Wait for healthy — Zitadel runs DB migrations on first boot (~60 s):**
 
 ```bash
-# Watch until zitadel logs "server is listening on...":
-podman compose logs -f zitadel
-# Ctrl-C once you see the listening message.
+# Watch logs until you see "server is listening":
+podman logs -f zitadel
+# Ctrl-C once you see: level=INFO msg="server is listening" address=[::]:8090
 
-# Or poll the health endpoint (wait for HTTP 200):
-until curl -sf http://127.0.0.1:8080/debug/healthz; do echo "waiting..."; sleep 5; done && echo "UP"
+# Or poll the discovery endpoint:
+until curl -sf http://127.0.0.1:8090/.well-known/openid-configuration > /dev/null; do
+  echo "waiting..."; sleep 5
+done && echo "UP"
 ```
 
-**If it doesn't come up:**
+**If Zitadel exits immediately:**
 ```bash
-podman compose logs db       # check postgres started OK
-podman compose logs zitadel  # look for migration or config errors
-# Common causes: port 8080 already in use; subuid issue (try: podman system migrate)
+podman logs zitadel    # look for migration or password errors
+# If "PasswordComplexityPolicy.MinLength": password too short — use Admin12345! (already correct above)
+# If port conflict: ss -tlnp | grep 8090
 ```
+
+---
+
+## RESTART (after container stop or VM reboot)
+
+```bash
+# Restart both containers (DB data is in the named volume — survives stop/start):
+podman start zitadel-db
+sleep 10
+podman start zitadel
+
+# Verify:
+podman ps
+curl -s http://127.0.0.1:8090/.well-known/openid-configuration | python3 -m json.tool | grep '"issuer"'
+```
+
+> **Note:** `podman start zitadel` works because the container already has the correct config baked
+> in from the initial `podman run`. On a full-reset (volumes deleted), re-run BRING UP from scratch.
 
 ---
 
 ## MANUAL — Zitadel web UI steps
 
-> These are click-through steps Claude Code cannot perform. Do them once after `BRING UP`.
+> These are click-through steps. Do them once after BRING UP completes and Zitadel is healthy.
 
-Open **http://127.0.0.1:8080/ui/console** in the browser on this machine.
+Open **http://127.0.0.1:8090/ui/console** in the browser on this machine.
 
 **Step 1 — Log in as admin**
-- Username: `admin@localhost.local` (try `admin` if that fails)
-- Password: `Admin1!`
-- If prompted to change password, you can skip or set a new one (update README).
+- Username: `admin@localhost.local` (try just `admin` if that fails)
+- Password: `Admin12345!`
 
 **Step 2 — Create an organisation**
 - Top-left menu → **Organizations** → **New organization**
 - Name: `DTL-PoC`
-- Click **Create** — note the **Org ID** (a UUID shown in the URL or org settings page).
+- Click **Create** — note the **Org ID** (UUID shown in the org settings or URL).
 
 **Step 3 — Create a project**
 - Inside DTL-PoC org → **Projects** → **Create project**
@@ -104,7 +146,7 @@ Open **http://127.0.0.1:8080/ui/console** in the browser on this machine.
 Fill in after completing the web UI steps above:
 
 ```
-ISSUER_URL=http://127.0.0.1:8080
+ISSUER_URL=http://127.0.0.1:8090
 CLIENT_ID=<paste from Step 4>
 ORG_ID=<paste from Step 2 org settings>
 CALLBACK_PORT=51234
@@ -121,20 +163,20 @@ Do NOT start M2 Step 2 (Electron OIDC code) until all three pass.
 ### (a) Discovery endpoint returns the correct issuer
 
 ```bash
-curl -s http://127.0.0.1:8080/.well-known/openid-configuration | python3 -m json.tool | grep '"issuer"'
-# Expected: "issuer": "http://127.0.0.1:8080"
+curl -s http://127.0.0.1:8090/.well-known/openid-configuration | python3 -m json.tool | grep '"issuer"'
+# Expected: "issuer": "http://127.0.0.1:8090"
 ```
 
 ### (b) Zitadel login page loads in the browser
 
-Open **http://127.0.0.1:8080** in the browser — Zitadel UI must render (not a network error).
+Open **http://127.0.0.1:8090** in the browser — Zitadel UI must render (not a network error).
 
 ### (c) Manual auth-code round-trip (proves OIDC flow end-to-end)
 
 Substitute `<CLIENT_ID>` with the value from Step 4, then paste the full URL into the browser:
 
 ```
-http://127.0.0.1:8080/oauth/v2/authorize?client_id=<CLIENT_ID>&redirect_uri=http%3A%2F%2F127.0.0.1%3A51234%2Fcallback&response_type=code&scope=openid%20profile%20email%20offline_access&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256&state=manual-test-001&nonce=manual-test-nonce-001
+http://127.0.0.1:8090/oauth/v2/authorize?client_id=<CLIENT_ID>&redirect_uri=http%3A%2F%2F127.0.0.1%3A51234%2Fcallback&response_type=code&scope=openid%20profile%20email%20offline_access&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256&state=manual-test-001&nonce=manual-test-nonce-001
 ```
 
 *(The `code_challenge` above is the RFC 7636 example value — fine for a manual test.)*
@@ -148,16 +190,15 @@ All three checks pass → the Zitadel lab is ready. Proceed to M2 Step 2.
 
 ---
 
-## Tear down / restart
+## TEAR DOWN
 
 ```bash
-cd ~/Downloads/dtl-app/lab/zitadel
+# Stop (keeps volumes — state and DB survive):
+podman stop zitadel zitadel-db
 
-# Stop (keeps volumes — state survives):
-podman compose down
-
-# Nuke everything including the DB (full reset — re-run MANUAL steps after):
-podman compose down -v
+# Full reset (deletes DB — must redo MANUAL steps after BRING UP):
+podman rm -f zitadel zitadel-db
+podman volume rm zitadel-db
 ```
 
 ---
@@ -165,5 +206,5 @@ podman compose down -v
 ## WARNING — per-machine
 
 This Zitadel instance is **local to this machine**. A home box or WSL environment must run
-its own instance from scratch (`podman compose up -d`) and redo the MANUAL steps.
+its own instance from scratch (re-run BRING UP) and redo the MANUAL steps.
 The `compose.yml` is committed; the DB data (named volume `zitadel-db`) and any secrets are not.
