@@ -6,7 +6,7 @@ import { PRODUCT_NAME, OIDC } from './config.js'
 import { getOidcClient } from './auth/oidc.js'
 import { runLoginFlow } from './auth/login-flow.js'
 import { logBackend, save, getValidAccessToken } from './auth/token-store.js'
-import { checkKillOnce } from './kill/poller.js'
+import { startKillPoller } from './kill/poller.js'
 
 app.setName(PRODUCT_NAME)
 
@@ -116,9 +116,8 @@ app.whenReady().then(async () => {
 
   createShell()
 
-  // ── M3 Step 3: one-shot kill-check at launch (logs verdict only; no wipe yet) ─────
-  // Step 5 will promote this to startKillPoller() with a periodic interval timer.
-  await checkKillOnce()
+  // M3 Step 5: start periodic kill-command poller (immediate check + interval).
+  startKillPoller()
 })
 
 app.on('window-all-closed', () => app.quit())

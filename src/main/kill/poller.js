@@ -1,4 +1,4 @@
-// Kill-switch poller — M3 Step 4 (VALID_WIPE now calls wipe() + quits).
+// Kill-switch poller — M3 Step 5 (launch + periodic interval).
 // Fetches the control-plane endpoint, verifies the signed command, dispatches.
 // D-M3-8: FAIL-OPEN — unreachable control plane is logged and ignored.
 // D-M3-9: endpoint is https://localhost:8444/kill (non-mTLS, lab CA trusted explicitly).
@@ -48,7 +48,7 @@ function fetchKillCommand() {
 
 /**
  * Fetch, parse, verify, and dispatch the verdict once.
- * Step 4: VALID_WIPE → record command_id → wipe() → quit.
+ * VALID_WIPE → record command_id → wipe() → quit.
  * All reject paths and VALID_NONE: log only, no side effects.
  */
 export async function checkKillOnce() {
@@ -114,4 +114,29 @@ export async function checkKillOnce() {
     default:
       console.warn('[kill] REJECTED — unhandled verdict:', verdict)
   }
+}
+
+/**
+ * Start the kill-switch poller: one immediate check at launch, then a periodic interval.
+ * Overlap guard: if a tick is still in flight when the next interval fires, that tick is
+ * skipped — preventing stacked async calls on a slow/hung control plane.
+ * After VALID_WIPE fires app.quit() the interval is moot; no explicit clearInterval needed.
+ */
+export function startKillPoller() {
+  let running = false
+
+  async function tick() {
+    if (running) {
+      console.log('[kill] poller tick skipped — previous check still in flight')
+      return
+    }
+    running = true
+    try { await checkKillOnce() }
+    finally { running = false }
+  }
+
+  // Immediate launch check (no await — returns to caller; interval fires later).
+  tick()
+  setInterval(tick, KILL.pollIntervalMs)
+  console.log('[kill] poller started — interval', KILL.pollIntervalMs, 'ms')
 }
