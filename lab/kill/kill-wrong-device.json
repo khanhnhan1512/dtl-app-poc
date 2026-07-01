@@ -1,0 +1,7 @@
+{
+  "action": "wipe",
+  "command_id": "cmd-003",
+  "device_id": "wrong-device-id",
+  "issued_at": 1782902164735,
+  "signature": "ailtzZWRZnMAKOK5QLBb7m2Q4oWOokFHb41XTksjoAM1fcZyPD9gjQpACBF2ToT5mVyXSuMYYdt2q3C2qhiaAQ=="
+}
