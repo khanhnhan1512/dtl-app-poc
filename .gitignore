@@ -243,4 +243,7 @@ lab/zitadel/data/
 lab/zitadel/.env
 lab/zitadel/secrets/
 
+# Kill-switch lab — private signing key NEVER committed (public key + samples are committed)
+lab/kill/*.key
+
 electron.vite.config.*.mjs
