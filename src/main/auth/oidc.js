@@ -59,6 +59,14 @@ export async function exchangeCode(client, code, state, codeVerifier, nonce) {
 }
 
 /**
+ * Silent refresh — wraps client.refresh(); caller must persist the returned tokenSet
+ * immediately because refresh tokens ROTATE on use.
+ */
+export async function refresh(client, refreshToken) {
+  return client.refresh(refreshToken)
+}
+
+/**
  * Company-account gate: email must be verified AND belong to the allowed domain.
  * Prefers userinfo (more authoritative for email claims), falls back to id_token.
  */

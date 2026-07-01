@@ -242,3 +242,5 @@ lab/certs/*.csr
 lab/zitadel/data/
 lab/zitadel/.env
 lab/zitadel/secrets/
+
+electron.vite.config.*.mjs

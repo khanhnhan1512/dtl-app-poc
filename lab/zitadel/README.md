@@ -19,6 +19,14 @@ Loopback callback port the Electron app will use: **`51234`**
 > **Image pinning:** Use `v2.71.10` — do NOT use `:latest` (v4 moved the login UI to a separate
 > "Login V2" app; `/ui/console` returns 404 in a single-container setup).
 
+> **safeStorage / `--password-store=basic` (NoMachine sessions):** In a NoMachine remote session the
+> gnome-keyring daemon is not auto-unlocked, so `safeStorage.isEncryptionAvailable()` returns `false`
+> and `encryptString()` throws. The fix is to run Electron with `--password-store=basic`, which forces
+> the built-in `basic_text` backend (no keyring needed, `isEncryptionAvailable()` returns `true`).
+> Tokens are Chromium-encrypted with the basic_text key (obfuscated, not keyring-backed — Decision 8 /
+> F4 PoC limitation; acceptable for PoC). On a physical desktop with an unlocked gnome-keyring, omit the
+> flag and safeStorage uses libsecret automatically (real OS keyring encryption).
+
 ---
 
 ## BRING UP (this VM — `podman run` path)
@@ -218,6 +226,73 @@ podman stop zitadel zitadel-db
 podman rm -f zitadel zitadel-db
 podman volume rm zitadel-db
 ```
+
+---
+
+## RUNNING THE ELECTRON APP ON THIS VM (token encryption / M2 Step 3)
+
+### Why it's fiddly here
+
+On a native GDM login, `pam_gnome_keyring.so` runs automatically and unlocks the `login`
+keyring so libsecret (and Electron's `safeStorage`) can encrypt via the OS keyring.
+
+On **NoMachine**, the PAM hook is absent (only `gdm-*` PAM files include it). The
+gnome-keyring daemon that systemd starts at user-login runs **headless** (no `DISPLAY`) and
+only registers a degraded `org.gnome.keyring.InternalUnsupportedGuiltRiddenInterface` on
+D-Bus — it does **NOT** expose `org.freedesktop.secrets.Service`. Electron's libsecret finds
+the bus name and selects `gnome_libsecret` backend, but `isEncryptionAvailable()` returns
+`false` because the Service interface is absent. Symptoms:
+
+```
+[token-store] storage backend      : gnome_libsecret
+[token-store] encryption available : false   ← the headless daemon problem
+```
+
+### The working command (NoMachine desktop terminal only)
+
+**Must run in the NoMachine terminal** — needs the session's `DISPLAY`. Do not run over SSH.
+
+```bash
+cd ~/Downloads/dtl-app
+
+dbus-run-session -- bash -c '
+  eval $(gnome-keyring-daemon --start --components=secrets)
+  GNOME_DESKTOP_SESSION_ID=this-is-deprecated ELECTRON_DISABLE_SANDBOX=1 \
+    ./node_modules/.bin/electron . --login
+'
+```
+
+`dbus-run-session` creates a private D-Bus session bus. `gnome-keyring-daemon --start`
+registers the full `org.freedesktop.secrets.Service` on it (this time WITH `DISPLAY` set, so
+it initialises the full interface). Electron, launched into the same private bus, selects
+`gnome_libsecret` and gets `isEncryptionAvailable() = true`.
+
+Expected output:
+```
+[token-store] logBackend() — storage backend      : gnome_libsecret
+[token-store] logBackend() — encryption available : true
+[login] PASS — email domain check passed
+[token-store] save() — encryptString() SUCCEEDED, NNN bytes
+[token-store] tokens.enc written to /home/khanhnhan/.config/DTL App/tokens.enc
+[login] getValidAccessToken: returned valid token from store
+```
+
+Verify:
+```bash
+ls   ~/.config/"DTL App"/             # tokens.enc present; NO .keyfile
+xxd  ~/.config/"DTL App"/tokens.enc | head -2  # binary — NOT {"access":"...
+```
+
+### Gotchas
+
+| Gotcha | Reason |
+|--------|--------|
+| Do NOT use `--password-store=basic` | Forces `basic_text`; on Electron 42 `IsEncryptionAvailable()` returns `false` for it and `encryptString` throws. |
+| `ELECTRON_DISABLE_SANDBOX=1` required | `chrome-sandbox` lacks SUID bit; user has no root. |
+| `GNOME_DESKTOP_SESSION_ID=this-is-deprecated` required | Without it Electron sees no GNOME session and falls back to `basic_text`. |
+| "gcr-prompter couldn't connect" / "Network service crashed" | Benign noise from the private D-Bus session; `encryptString` succeeds despite these lines. |
+| After VM reboot | The headless systemd daemon returns. Re-run the `dbus-run-session` wrapper. |
+| Native desktop / WSLg | No wrapping needed — `safeStorage` auto-picks `gnome_libsecret` with a working keyring. |
 
 ---
 
