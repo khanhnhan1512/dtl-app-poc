@@ -179,28 +179,34 @@ grow a third clause, keeping it **UI-agnostic and reusable** (M3 calls the same 
 
 ### Step 4 — Gate the shell on auth (delivers criteria 1 & 4; M0/M1 regression gate)
 
-- **Files:** `src/main/index.js` *(modify — `ensureAuthenticated()` before `createShell()`)*,
-  `src/main/window.js` *(modify — load portal only when authenticated; surface a status string to the
-  chrome renderer)*, `src/renderer/*` *(modify — minimal **"Sign in with DTL"** gate screen with
-  "Signing in… / Signed in" states; user clicks to start (no auto-open); reuses the M1 chrome renderer,
-  no tokens cross IPC; persistent identity indicator deferred to M3 — Decision 4)*.
+**Approach used: AUTH-FIRST, WINDOW-SECOND** (Decision 4 revised — gate screen deferred).
+`ensureAuthenticated()` runs entirely in Main before `createShell()`; `window.js` is **untouched**;
+tokens **never cross IPC**; no renderer gate screen. The gate-screen / identity indicator is deferred
+to M3 or later. The app auto-opens the system browser when no valid token exists (no click required).
+
+- **Files:** `src/main/index.js` *(modify — add `ensureAuthenticated()` before `createShell()`; refactor
+  `--login` branch to use shared `runLoginFlow()` helper)*, `src/main/auth/login-flow.js` *(new —
+  `runLoginFlow()` shared helper: browser-open + loopback + exchange + domain-check; removes duplication
+  between `--login` branch and normal launch)*.
+  **NOT modified:** `src/main/window.js`, `src/renderer/*` (no renderer changes needed).
 - **What it does:** wires the pieces: valid token ⇒ portal loads; no token ⇒ browser login then portal;
   refresh-failure ⇒ forced re-auth; **no valid token ⇒ no portal** (criterion 4). Login gates launch.
-- **Verify (VM):** cold start with no tokens → login → portal renders `verify=SUCCESS …
+- **Verify (VM — VERIFIED):** cold start with no tokens → login → portal renders `verify=SUCCESS …
   CN=DTL-Ubuntu-Test-Device` (M0 mTLS **still fires** through the authenticated shell — **regression
   gate**); M1 shell (branding, default-deny nav, kiosk lock) intact; restart → no re-login (token
-  reused); delete/expire tokens → re-auth forced; never any portal without a token.
+  reused); delete tokens → re-auth forced; cancel login → portal does NOT load, app quits.
 
-### Step 5 — Extend `wipe()` to clear tokens (completes F3 scope)
+### Step 5 — Extend `wipe()` to clear tokens (completes F3 scope) — VERIFIED
 
 - **Files:** `src/main/wipe.js` *(modify — add clause (c) `token-store.clearTokens()`; extend the
   result object; document the partition conditional)*.
 - **What it does:** the wipe now clears **session data + NSS cert + tokens** — the full F3 scope —
   while staying a single reusable, UI-agnostic function M3 can call behind the signed kill.
-- **Verify:** authenticate, confirm `tokens.enc` exists → `electron . --wipe` → `tokens.enc` gone,
-  NSS cert gone (`certutil -L`/`-K`), session cleared; relaunch → **forced re-login AND** `:8443`
-  handshake fails (locked out of both user + device layers). Re-inject the cert
-  (`lab/reprovision-cert.sh`) + re-login → access restored (manual recovery path intact).
+- **Verify (VM — VERIFIED):** authenticate → `tokens.enc` present → `electron . --wipe` logs
+  `[wipe] SUCCESS { sessionCleared: true, certDeleted: true, tokensCleared: true }`;
+  `tokens.enc` gone; `certutil -L` shows DTL-Ubuntu-Test-Device gone; relaunch → forced re-login
+  AND `:8443` returns nginx 400 "No required SSL certificate" (locked out of both user + device layers).
+  `lab/reprovision-cert.sh` + re-login → portal back to `verify=SUCCESS` (recovery path intact).
 
 ## Risk assessment
 
@@ -245,20 +251,23 @@ grow a third clause, keeping it **UI-agnostic and reusable** (M3 calls the same 
 
 ## Definition of Done (mirrors roadmap M2)
 
-- [ ] **DoD-1** — On launch the user is sent to **Zitadel in the system browser**; on success the
-  loopback redirect returns control and the shell loads the portal.
-- [ ] **DoD-2** — The login UI is **never** rendered inside the WebView.
-- [ ] **DoD-3** — Tokens live **only** in Main via `safeStorage`; the renderer cannot read them;
-  `getSelectedStorageBackend()` is logged and **real encryption verified on a desktop** (with the
-  `basic_text` fallback documented for headless).
-- [ ] **DoD-4** — Token expiry ⇒ **silent refresh**; refresh failure ⇒ **re-auth**; **no valid token ⇒
-  no portal**.
-- [ ] **DoD-5** — Company-account restriction enforced (Zitadel org scoping + Main-process claim check).
-- [ ] **DoD-6 (wipe)** — `wipe()` now clears **session + NSS cert + tokens** (full F3 scope), stays a
-  single reusable UI-agnostic function; post-wipe relaunch forces **re-login and** mTLS lockout.
-- [ ] **DoD-7 (regression)** — M0 mTLS (`verify=SUCCESS`) and the M1 shell (branding, default-deny nav,
-  kiosk lock) still pass through the authenticated shell.
-- [ ] Auth logic isolated in `src/main/auth/` (decoupled from UI per rebuild-risk #3); minimal new deps.
+- [x] **DoD-1** — On launch the user is sent to **Zitadel in the system browser**; on success the
+  loopback redirect returns control and the shell loads the portal. *(VERIFIED on VM)*
+- [x] **DoD-2** — The login UI is **never** rendered inside the WebView. *(system browser only — RFC 8252)*
+- [x] **DoD-3** — Tokens live **only** in Main via `safeStorage`; the renderer cannot read them;
+  backend `gnome_libsecret`, `isEncryptionAvailable()=true`, `tokens.enc` is real OSCrypt binary.
+  `basic_text` fallback documented + rejected. *(VERIFIED on VM — see Decision 8)*
+- [x] **DoD-4** — Token expiry ⇒ **silent refresh**; refresh failure ⇒ **re-auth**; **no valid token ⇒
+  no portal**. *(VERIFIED: cancel login → app quits, portal never loads)*
+- [x] **DoD-5** — Company-account restriction enforced: `email_verified === true` AND `email` ends with
+  `@dtl.local`. *(VERIFIED: testuser@dtl.local passes; domain mismatch quits)*
+- [x] **DoD-6 (wipe)** — `wipe()` clears **session + NSS cert + tokens** (full F3 scope), single
+  reusable UI-agnostic function; returns `{ sessionCleared, certDeleted, tokensCleared }`;
+  post-wipe: nginx 400 "No required SSL certificate" + forced re-login. *(VERIFIED on VM)*
+- [x] **DoD-7 (regression)** — M0 mTLS (`verify=SUCCESS … CN=DTL-Ubuntu-Test-Device`) and M1 shell
+  (branding, default-deny nav, kiosk lock) pass through the authenticated shell. *(VERIFIED)*
+- [x] Auth logic isolated in `src/main/auth/` (decoupled from UI per rebuild-risk #3); minimal new deps
+  (`openid-client` v5.7.1 CJS — pinned).
 
 ## Next steps (after approval)
 
@@ -281,9 +290,10 @@ grow a third clause, keeping it **UI-agnostic and reusable** (M3 calls the same 
    still applies:** externalize it correctly in the electron-vite **Main** build and **pin a version**.
 3. **Login GATES the portal.** `createShell()` must **not** load `HOME_URL` until a valid token exists —
    **no token ⇒ no portal** (roadmap criterion 4).
-4. **Pre-auth UI — a minimal "Sign in with DTL" gate screen in the M1 chrome renderer** (the user clicks
-   to start; the app does **not** auto-open the browser on launch). A persistent auth/identity indicator
-   is **deferred to M3** (with the managed-by-DTL / kill-switch status).
+4. **Pre-auth UI — REVISED: no gate screen (auth-first, window-second).** `ensureAuthenticated()` runs
+   fully in Main before `createShell()`; app auto-opens the system browser when no token exists (no
+   click required); `window.js` and the renderer are untouched. The "Sign in with DTL" gate screen and
+   persistent identity indicator are **deferred to M3** (with the managed-by-DTL / kill-switch status).
 5. **Zitadel client (per-machine; user provisions manually; documented in `lab/zitadel/README.md`).**
    A **public/native PKCE app (no secret)**, redirect `http://127.0.0.1:<port>/callback`, scopes
    `openid profile email offline_access`, one org/project + one test user.
@@ -295,9 +305,33 @@ grow a third clause, keeping it **UI-agnostic and reusable** (M3 calls the same 
    the Zitadel v2 login page to hang. Email-domain check is the "prod path" from the original
    Decision 6; the org-id path is superseded.
 7. **Token refresh — lazy** (on launch + on expiry); **no** proactive pre-expiry timer. KISS.
-8. **`safeStorage` backend — verify-on-machine, not a design choice.** Log
-   `getSelectedStorageBackend()` at startup (Steps 2/3); verify real encryption where a keyring is
-   available; document the `basic_text` fallback as a known PoC limitation (F4 tamper already accepted).
+8. **`safeStorage` backend — RESOLVED (VM-specific; Decision 8).** Root cause on this VM: NoMachine
+   sessions don't run `pam_gnome_keyring.so`, so the systemd-started gnome-keyring daemon runs headless
+   (no DISPLAY) and exposes only `InternalUnsupportedGuiltRiddenInterface` — NOT the full
+   `org.freedesktop.secrets.Service`. Electron selects `gnome_libsecret` backend but
+   `isEncryptionAvailable()` returns `false`.
+
+   **WORKING SOLUTION (verified):** wrap the app in `dbus-run-session` from the NoMachine terminal:
+   ```
+   dbus-run-session -- bash -c '
+     eval $(gnome-keyring-daemon --start --components=secrets)
+     GNOME_DESKTOP_SESSION_ID=this-is-deprecated ELECTRON_DISABLE_SANDBOX=1 \
+       ./node_modules/.bin/electron . [args]
+   '
+   ```
+   Result: `gnome_libsecret` backend, `isEncryptionAvailable()=true`, `tokens.enc` is real
+   Chromium OSCrypt binary (v11 header, not human-readable).
+
+   **REJECTED alternatives (do not retry):**
+   - `--password-store=basic` → forces `basic_text`; in Electron 42 `encryptString()` throws for
+     `basic_text` (it is "truly no encryption"; `IsEncryptionAvailable()` returns false).
+   - Plaintext PLN1 fallback → contradicts DoD-3 (tokens must be OS-encrypted).
+   - Self-rolled AES-256-GCM with a `.keyfile` beside `tokens.enc` → violates Decision 2
+     (no hand-rolled crypto); storing the key beside the ciphertext is encryption in name only.
+
+   **token-store is safeStorage-only, FAIL-LOUD:** if `isEncryptionAvailable()` is false at `save()`,
+   it throws a clear error and writes nothing. On a native desktop / WSLg with an unlocked keyring,
+   no wrapping is needed — `safeStorage` auto-picks `gnome_libsecret`.
 9. **Session partition — keep the portal on `defaultSession` (no partition).** Tokens live in
    `safeStorage` files, not an Electron session, so a partition buys nothing and would complicate
    `wipe()`. *(If ever added, `wipe()` must target that session — the M1 caveat.)*
