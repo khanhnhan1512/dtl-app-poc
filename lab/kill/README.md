@@ -63,6 +63,56 @@ All three pass → Step 1 is verified. Proceed to Step 2 (serve via nginx `:8444
 
 ---
 
+## Step 2 — Serve via nginx (M3 Step 2 gate)
+
+The kill endpoint is `https://localhost:8444/kill` (TLS, no client cert required — D-M3-9).
+`kill-command.json` is the **active** file nginx serves; swap it to toggle none ↔ wipe.
+
+> **Permission gotcha:** nginx runs as a different uid inside the container; JSON files must be
+> world-readable (`chmod 644`). `sign-command.sh` sets this automatically. If you write a file
+> manually (e.g. `cp kill-none.json kill-command.json`), run `chmod 644 kill-command.json` after.
+
+### First-time setup (or after container was removed)
+
+```bash
+cd ~/Downloads/dtl-app
+
+# Initialize active command to no-op:
+cp lab/kill/kill-none.json lab/kill/kill-command.json
+
+# Start (or restart) nginx with the kill volume mount:
+podman stop dtl-mtls-nginx; podman rm dtl-mtls-nginx 2>/dev/null || true
+podman run -d --name dtl-mtls-nginx \
+  -p 8443:8443 -p 8444:8444 \
+  -v ~/Downloads/dtl-app/lab/nginx/mtls.conf:/etc/nginx/conf.d/default.conf:ro,Z \
+  -v ~/Downloads/dtl-app/lab/certs:/etc/nginx/certs:ro,Z \
+  -v ~/Downloads/dtl-app/lab/kill:/etc/nginx/kill:ro,Z \
+  nginx:alpine
+```
+
+### Verify Step 2 (M3 Step 2 gate)
+
+```bash
+cd ~/Downloads/dtl-app
+
+# 1. Returns signed JSON (action:"none"):
+curl -s --cacert lab/certs/ca.pem https://localhost:8444/kill
+
+# 2. Byte-identical to source (no reformatting — signature must not break):
+curl -s --cacert lab/certs/ca.pem https://localhost:8444/kill | diff - lab/kill/kill-command.json
+# → no output (identical)
+
+# 3. Swap to wipe and confirm:
+cp lab/kill/kill-wipe.json lab/kill/kill-command.json
+curl -s --cacert lab/certs/ca.pem https://localhost:8444/kill | python3 -m json.tool
+# → action: "wipe"
+
+# 4. Reset to none after demo:
+cp lab/kill/kill-none.json lab/kill/kill-command.json
+```
+
+All pass → Step 2 verified. Proceed to Step 3 (in-app verifier, no wipe yet).
+
 ## SIGN A NEW COMMAND
 
 ```bash

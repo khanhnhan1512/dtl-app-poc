@@ -4,28 +4,33 @@ Local HTTPS test endpoints for M0 spike + M1 Step 2 navigation verification. All
 
 ## Run order
 
-```
+```bash
 # 1. Generate certs (once per machine)
 bash lab/certs/gen-certs.sh
 
-# 2. Start nginx container (two server blocks: :8443 mTLS on, :8444 mTLS optional)
+# 2. Initialize the active kill-command to no-op (once per machine; re-run after a wipe demo)
+cp ~/Downloads/dtl-app/lab/kill/kill-none.json ~/Downloads/dtl-app/lab/kill/kill-command.json
+
+# 3. Start nginx container (three server blocks: :8443 mTLS on, :8444 mTLS optional + /kill endpoint)
 podman run -d --name dtl-mtls-nginx \
   -p 8443:8443 -p 8444:8444 \
   -v ~/Downloads/dtl-app/lab/nginx/mtls.conf:/etc/nginx/conf.d/default.conf:ro,Z \
   -v ~/Downloads/dtl-app/lab/certs:/etc/nginx/certs:ro,Z \
+  -v ~/Downloads/dtl-app/lab/kill:/etc/nginx/kill:ro,Z \
   nginx:alpine
 
-# 3. Import CA + client cert into NSS (~/.pki/nssdb)
+# 4. Import CA + client cert into NSS (~/.pki/nssdb)
 bash lab/provision-nss.sh
 
-# 4. (After a wipe) Re-inject client cert only (CA survives the wipe)
+# 5. (After a wipe) Re-inject client cert only (CA survives the wipe)
 bash lab/reprovision-cert.sh
 ```
 
 ## Verify (curl)
 
 ```bash
-cd lab/certs
+cd ~/Downloads/dtl-app/lab/certs
+
 # WITH cert → :8443 (expect verify=SUCCESS)
 curl -s --cacert ca.pem --cert client.crt --key client.key https://localhost:8443/
 
@@ -37,6 +42,9 @@ curl -s --cacert ca.pem https://localhost:8444/
 
 # Nav-test page (M1 Step 2) — with cert → :8443/nav (expect HTML with test links)
 curl -s --cacert ca.pem --cert client.crt --key client.key https://localhost:8443/nav | grep -o '<title>.*</title>'
+
+# Kill endpoint (M3 Step 2) — :8444/kill, no client cert needed
+curl -s --cacert ca.pem https://localhost:8444/kill
 ```
 
 ## Navigation test page (M1 Step 2)
@@ -50,12 +58,28 @@ curl -s --cacert ca.pem --cert client.crt --key client.key https://localhost:844
 | `https://example.com/` | Page stays put; `[nav] BLOCKED` logged (blocked before any network call) |
 | Same-host `_blank` | Loads in the same view — no new window (setWindowOpenHandler deny) |
 
-**nginx restart required** when `mtls.conf` changes (conf is read at startup, not hot-reloaded):
+**nginx restart required** when `mtls.conf` changes (conf is read at startup, not hot-reloaded).
+Static files (`kill-command.json`) are served fresh on each request — no restart needed to swap them.
+
 ```bash
 podman stop dtl-mtls-nginx && podman rm dtl-mtls-nginx
 podman run -d --name dtl-mtls-nginx \
   -p 8443:8443 -p 8444:8444 \
   -v ~/Downloads/dtl-app/lab/nginx/mtls.conf:/etc/nginx/conf.d/default.conf:ro,Z \
   -v ~/Downloads/dtl-app/lab/certs:/etc/nginx/certs:ro,Z \
+  -v ~/Downloads/dtl-app/lab/kill:/etc/nginx/kill:ro,Z \
   nginx:alpine
+```
+
+## Kill-command swap (M3 demo)
+
+```bash
+# No-op (app polls, nothing happens):
+cp ~/Downloads/dtl-app/lab/kill/kill-none.json ~/Downloads/dtl-app/lab/kill/kill-command.json
+
+# Activate wipe (next app poll triggers wipe):
+cp ~/Downloads/dtl-app/lab/kill/kill-wipe.json ~/Downloads/dtl-app/lab/kill/kill-command.json
+
+# Confirm what's currently served:
+curl -s --cacert ~/Downloads/dtl-app/lab/certs/ca.pem https://localhost:8444/kill | python3 -m json.tool
 ```

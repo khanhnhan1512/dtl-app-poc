@@ -55,3 +55,9 @@ process.stdout.write(JSON.stringify(doc, null, 2) + '\n')
 process.stderr.write('[sign] canonical bytes: ' + canonical + '\n')
 process.stderr.write('[sign] signature (' + sigBytes.length + ' bytes): ' + signature.substring(0, 20) + '...\n')
 NODESCRIPT
+
+# JSON files that nginx serves must be world-readable (nginx runs as a different uid in the container).
+# If output was redirected to a file in this directory, fix it proactively.
+for f in "$SCRIPT_DIR/kill-none.json" "$SCRIPT_DIR/kill-wipe.json" "$SCRIPT_DIR/kill-command.json"; do
+  [[ -f "$f" ]] && chmod 644 "$f" 2>/dev/null || true
+done
