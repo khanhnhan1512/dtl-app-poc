@@ -3,6 +3,7 @@ import { spawn } from 'child_process'
 import { join } from 'path'
 import os from 'os'
 import { CERT_SUBJECT_CN } from './config.js'
+import { clearTokens } from './auth/token-store.js'
 
 function runCertutil(args) {
   return new Promise((resolve, reject) => {
@@ -17,6 +18,23 @@ function runCertutil(args) {
   })
 }
 
+/**
+ * Full device wipe — three clauses, executed in order:
+ *
+ *   (a) Electron session data (storage, cache, auth cache) on defaultSession.
+ *       NOTE: portal runs on defaultSession (Decision 9, no partition).
+ *       IF a session.fromPartition() is ever added, wipe() MUST also clear that
+ *       partition here — otherwise cookies/storage in that partition survive the wipe.
+ *
+ *   (b) NSS client cert + private key via certutil -F (removes key AND cert atomically).
+ *       NEVER use -D — it removes only the cert, orphaning the private key in NSS.
+ *
+ *   (c) Encrypted token file (userData/tokens.enc) via token-store.clearTokens().
+ *       Covers OIDC access/refresh tokens stored by safeStorage.
+ *
+ * Returns { sessionCleared, certDeleted, tokensCleared }.
+ * UI-agnostic — callable from --wipe branch and M3's signed kill command.
+ */
 export async function wipe() {
   console.log('[wipe] Starting wipe...')
 
@@ -33,7 +51,11 @@ export async function wipe() {
   await runCertutil(['-F', '-n', CERT_SUBJECT_CN, '-d', nssdb])
   console.log(`[wipe] Deleted cert+key "${CERT_SUBJECT_CN}" from NSS (${nssdb}).`)
 
-  const result = { sessionCleared: true, certDeleted: true, nickname: CERT_SUBJECT_CN }
+  // (c) OIDC tokens — delete userData/tokens.enc
+  clearTokens()
+  console.log('[wipe] Cleared OIDC token store.')
+
+  const result = { sessionCleared: true, certDeleted: true, tokensCleared: true }
   console.log('[wipe] Done.', result)
   return result
 }
