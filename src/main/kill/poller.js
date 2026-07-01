@@ -1,13 +1,16 @@
-// Kill-switch poller — M3 Step 3 (verdict log only; wipe wired in Step 4).
-// Fetches the control-plane endpoint, verifies the signed command, and logs the verdict.
+// Kill-switch poller — M3 Step 4 (VALID_WIPE now calls wipe() + quits).
+// Fetches the control-plane endpoint, verifies the signed command, dispatches.
 // D-M3-8: FAIL-OPEN — unreachable control plane is logged and ignored.
 // D-M3-9: endpoint is https://localhost:8444/kill (non-mTLS, lab CA trusted explicitly).
+// D-M3-10: post-kill the app quits; locked-out state surfaces on next relaunch.
+import { app } from 'electron'
 import { request as httpsRequest } from 'https'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { KILL } from '../config.js'
 import { verifyKillCommand, Verdict } from './verify.js'
 import * as ledger from './ledger.js'
+import { wipe } from '../wipe.js'
 
 /** Fetch the kill-command URL using the lab CA for TLS trust. Returns the raw body string. */
 function fetchKillCommand() {
@@ -44,8 +47,9 @@ function fetchKillCommand() {
 }
 
 /**
- * Fetch, parse, verify, and LOG the verdict once.
- * Step 3: logs only — does NOT call wipe(). Step 4 wires the real wipe.
+ * Fetch, parse, verify, and dispatch the verdict once.
+ * Step 4: VALID_WIPE → record command_id → wipe() → quit.
+ * All reject paths and VALID_NONE: log only, no side effects.
  */
 export async function checkKillOnce() {
   console.log('[kill] checkKillOnce — fetching', KILL.url)
@@ -69,10 +73,23 @@ export async function checkKillOnce() {
   console.log('[kill] command_id:', doc?.command_id, '| action:', doc?.action, '| verdict:', verdict)
 
   switch (verdict) {
-    case Verdict.VALID_WIPE:
-      // Step 3: log only. Step 4 wires the real wipe behind this verdict.
-      console.log('[kill] WOULD WIPE (Step 4 wires the real wipe)')
-      break
+    case Verdict.VALID_WIPE: {
+      // Idempotency: record BEFORE the destructive call so a crash/race after wipe()
+      // but before quit() cannot re-execute the same command_id after recovery.
+      ledger.record(doc.command_id)
+      console.log('[kill] VALID_WIPE — executing wipe (M2 full-scope: session + cert + tokens)')
+      try {
+        const result = await wipe()
+        console.log('[kill] wipe() result:', result)
+      } catch (err) {
+        console.error('[kill] wipe() threw:', err.message)
+      }
+      // D-M3-10: quit after wipe; locked-out state surfaces on next relaunch via M2 auth gate
+      // (no token → forced re-login) and M0 mTLS (no cert → nginx 400).
+      console.log('[kill] kill complete — quitting app')
+      app.quit()
+      return
+    }
     case Verdict.VALID_NONE:
       console.log('[kill] no command (action:none) — app continues normally')
       break
