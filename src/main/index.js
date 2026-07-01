@@ -1,10 +1,10 @@
-import { app, Menu, shell } from 'electron'
+import { app, Menu } from 'electron'
 import { handleCertSelect } from './cert-select.js'
 import { wipe } from './wipe.js'
 import { createShell } from './window.js'
 import { PRODUCT_NAME, OIDC } from './config.js'
-import { startOidcFlow, exchangeCode, checkEmailDomain } from './auth/oidc.js'
-import { startLoopbackServer } from './auth/loopback.js'
+import { getOidcClient } from './auth/oidc.js'
+import { runLoginFlow } from './auth/login-flow.js'
 import { logBackend, save, getValidAccessToken } from './auth/token-store.js'
 
 app.setName(PRODUCT_NAME)
@@ -15,7 +15,46 @@ if (process.env.NODE_ENV !== 'development') {
 
 app.on('select-client-certificate', handleCertSelect)
 
+/**
+ * Ensure a valid access token exists before the shell is created.
+ * - Valid stored token  → returns true immediately (warm start, no browser).
+ * - No/expired token   → runs the full OIDC flow in the system browser, persists the
+ *                        new token set, and returns true.
+ * - Domain rejected / flow failure / save failure → logs the reason and returns false.
+ *
+ * Criterion 4: createShell() is only called when this returns true.
+ */
+async function ensureAuthenticated() {
+  logBackend()
+  console.log('[auth] userData path:', app.getPath('userData'))
+
+  // Discover once — the client is reused for both refresh and (if needed) the new flow.
+  const client = await getOidcClient()
+
+  const accessToken = await getValidAccessToken(client)
+  if (accessToken) {
+    console.log('[auth] Valid stored token — no login required (warm start)')
+    return true
+  }
+
+  console.log('[auth] No valid token — starting OIDC flow')
+  try {
+    const { tokenSet, email, allowed } = await runLoginFlow()
+    if (!allowed) {
+      console.error('[auth] REJECTED — email domain mismatch:', email)
+      return false
+    }
+    console.log('[auth] PASS —', email)
+    save(tokenSet)
+    return true
+  } catch (err) {
+    console.error('[auth] Login flow failed:', err.message)
+    return false
+  }
+}
+
 app.whenReady().then(async () => {
+  // ── Dev: wipe ──────────────────────────────────────────────────────────────────────
   if (process.argv.includes('--wipe')) {
     try {
       const result = await wipe()
@@ -28,53 +67,35 @@ app.whenReady().then(async () => {
     return
   }
 
-  // Dev-only: OIDC round-trip + token persistence + reload verification. No app window.
+  // ── Dev: OIDC round-trip + token persistence + reload verification. No app window. ─
   if (process.argv.includes('--login')) {
     try {
       logBackend()
       console.log('[login] userData path:', app.getPath('userData'))
 
-      const { client, authUrl, codeVerifier, state, nonce } = await startOidcFlow()
+      const { client, tokenSet, claims, userinfoClaims, email, emailVerified, allowed } =
+        await runLoginFlow()
 
-      // Start loopback listener BEFORE opening the browser.
-      const callbackPromise = startLoopbackServer(state)
-
-      // RFC 8252 §7.3 — login MUST happen in the system browser, never an embedded view.
-      console.log('[login] Opening system browser for login (RFC 8252 — NOT an embedded view)')
-      await shell.openExternal(authUrl)
-
-      console.log('[login] Waiting for loopback callback on', OIDC.redirectUri, '...')
-      const { code } = await callbackPromise
-      console.log('[login] Callback received — exchanging code')
-
-      const { tokenSet, claims, userinfoClaims } = await exchangeCode(client, code, state, codeVerifier, nonce)
-
+      // Verbose diagnostics — kept for dev/debug purposes.
       console.log('[login] id_token claims:', JSON.stringify(claims, null, 2))
       console.log('[login] userinfo claims:', JSON.stringify(userinfoClaims, null, 2))
-
-      const { email, emailVerified, allowed } = checkEmailDomain(claims, userinfoClaims)
       console.log(`[login] email          : ${email}`)
       console.log(`[login] email_verified : ${emailVerified}`)
       console.log(`[login] allowed domain : @${OIDC.allowedEmailDomain}`)
 
       if (allowed) {
         console.log('[login] PASS — email domain check passed')
-      } else {
-        console.log('[login] REJECTED — email not verified or domain mismatch')
-        process.exitCode = 1
-      }
-
-      // Step 3: persist tokens, then immediately verify reload + silent refresh path.
-      if (allowed) {
         save(tokenSet)
-
-        const accessToken = await getValidAccessToken(client)
-        if (accessToken) {
+        const storedToken = await getValidAccessToken(client)
+        if (storedToken) {
           console.log('[login] getValidAccessToken: returned valid token from store')
         } else {
           console.log('[login] getValidAccessToken: returned null (unexpected)')
           process.exitCode = 1
         }
+      } else {
+        console.log('[login] REJECTED — email not verified or domain mismatch')
+        process.exitCode = 1
       }
     } catch (err) {
       console.error('[login] FAILED', err.message)
@@ -84,6 +105,15 @@ app.whenReady().then(async () => {
     return
   }
 
+  // ── Normal launch: gate portal on authentication (M2 Step 4) ───────────────────────
+  const authenticated = await ensureAuthenticated()
+  if (!authenticated) {
+    console.error('[auth] Authentication failed — portal will not load (criterion 4)')
+    app.quit()
+    return
+  }
+
   createShell()
 })
+
 app.on('window-all-closed', () => app.quit())

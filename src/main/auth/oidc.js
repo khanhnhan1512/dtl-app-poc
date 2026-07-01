@@ -1,20 +1,24 @@
 import { Issuer, generators } from 'openid-client'
 import { OIDC } from '../config.js'
 
-/**
- * Discover the IdP and build the authorization URL.
- * Returns everything needed for the exchange step.
- */
-export async function startOidcFlow() {
+/** Discover the IdP and return a configured openid-client Client instance. */
+export async function getOidcClient() {
   const issuer = await Issuer.discover(OIDC.issuerUrl)
   console.log('[oidc] Discovered issuer:', issuer.issuer)
-
-  const client = new issuer.Client({
+  return new issuer.Client({
     client_id: OIDC.clientId,
     redirect_uris: [OIDC.redirectUri],
     response_types: ['code'],
     token_endpoint_auth_method: 'none', // native/public PKCE app — no secret
   })
+}
+
+/**
+ * Discover the IdP and build the authorization URL.
+ * Returns everything needed for the exchange step.
+ */
+export async function startOidcFlow() {
+  const client = await getOidcClient()
 
   const codeVerifier = generators.codeVerifier()
   const codeChallenge = generators.codeChallenge(codeVerifier)
