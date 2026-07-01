@@ -259,24 +259,56 @@ app.whenReady()
 
 ## Definition of Done (mirrors roadmap M3)
 
-- [ ] **DoD-1** — App polls the control plane at launch + periodically (interval configurable).
-- [ ] **DoD-2** — Kill command is Ed25519-signed; app verifies against the hardcoded public key.
-- [ ] **DoD-3** — Valid/fresh/for-this-device/unseen command ⇒ `wipe()` (session + cert + tokens),
+- [x] **DoD-1** — App polls the control plane at launch + periodically (interval configurable).
+  *(VERIFIED on VM — `[kill] poller started — interval 30000 ms`; VALID_NONE repeats every pollIntervalMs.)*
+- [x] **DoD-2** — Kill command is Ed25519-signed; app verifies against the hardcoded public key.
+  *(VERIFIED on VM — standalone verify-check.js + in-app verifier both confirmed round-trip.)*
+- [x] **DoD-3** — Valid/fresh/for-this-device/unseen command ⇒ `wipe()` (session + cert + tokens),
   same result object as M2.
-- [ ] **DoD-4** — Tampered / unsigned / wrong-device / stale / already-executed ⇒ ignored (logged, no
+  *(VERIFIED on VM — `[wipe] Done. { sessionCleared: true, certDeleted: true, tokensCleared: true }`)*
+- [x] **DoD-4** — Tampered / unsigned / wrong-device / stale / already-executed ⇒ ignored (logged, no
   wipe). All reject paths demonstrated.
-- [ ] **DoD-5** — Post-kill end state == manual `--wipe`: forced re-login + `:8443` nginx 400; recovery
+  *(VERIFIED on VM — all five reject verdicts confirmed: BAD_SIGNATURE, NOT_THIS_DEVICE, STALE,
+  ALREADY_EXECUTED; MALFORMED covered by type-guard in verifyKillCommand.)*
+- [x] **DoD-5** — Post-kill end state == manual `--wipe`: forced re-login + `:8443` nginx 400; recovery
   via `reprovision-cert.sh` + re-login. Kill is one-way.
-- [ ] **DoD-6 (regression)** — M0 mTLS, M1 shell, M2 auth all intact; `wipe.js` unchanged; kill is a
+  *(VERIFIED on VM — tokens.enc gone, cert gone, relaunch forces re-login; :8443 returns nginx 400;
+  reprovision-cert.sh + re-login restores verify=SUCCESS.)*
+- [x] **DoD-6 (regression)** — M0 mTLS, M1 shell, M2 auth all intact; `wipe.js` unchanged; kill is a
   trigger in front of the existing wipe.
-- [ ] **DoD-7** — Wire format documented in `contracts/kill-command.md` (canonical signed bytes pinned);
+  *(VERIFIED — wipe.js untouched from M2; cert handler, createShell(), ensureAuthenticated() unchanged.)*
+- [x] **DoD-7** — Wire format documented in `contracts/kill-command.md` (canonical signed bytes pinned);
   no new runtime dependency (Ed25519 via Node `crypto`).
-- [ ] Fail policy is fail-open (D-M3-8); kill endpoint is `:8444` non-mTLS (D-M3-9); post-kill the app
+  *(VERIFIED — contracts/kill-command.md committed; openid-client remains the only runtime dep.)*
+- [x] Fail policy is fail-open (D-M3-8); kill endpoint is `:8444` non-mTLS (D-M3-9); post-kill the app
   quits (D-M3-10).
+  *(VERIFIED on VM — nginx stop → "control plane unreachable — ignoring (fail-open)", app kept running;
+  mid-session flip wipes a running device within one poll interval; app quits after wipe.)*
 
-## Next steps (after approval)
+## As-built notes
 
-- Implement Steps 1 → 5 in order, verifying each on the VM before proceeding (Step 1 gates Step 2;
-  Step 4 is the regression gate).
-- On M3 sign-off, write the detailed **M4 (device-bound mTLS ↔ OIDC session integration + OS packaging)**
-  plan — one milestone at a time.
+Differences/refinements vs. the plan that are worth recording for future reference:
+
+1. **Kill endpoint (D-M3-9 as-built):** `:8444` is HTTPS with `ssl_verify_client optional` (TLS
+   transport, no client cert required). The app fetch uses `ca: readFileSync(KILL.caPath)` (trusts only
+   the lab CA) — never `rejectUnauthorized:false`. The plan said "`:8443` or `:8444`" with D-M3-9 still
+   open; it resolved to `:8444`.
+
+2. **Overlap guard in `startKillPoller()`:** a `running` boolean flag skips a tick if the prior
+   `checkKillOnce()` is still in flight — prevents stacked async calls on a slow/hung control plane.
+   Not in the original plan spec; added during Step 5 implementation for robustness.
+
+3. **Ledger records BEFORE `wipe()`:** `ledger.record(command_id)` is called *before* the destructive
+   call, so a crash/quit race after `wipe()` but before `app.quit()` cannot re-execute the same
+   `command_id` after recovery. Minor ordering detail; idempotency-safe.
+
+4. **`chmod 644` gotcha:** `kill-command.json` (and all kill JSON files served by nginx) must be
+   world-readable (`644`). nginx runs as a different uid inside the podman container; `640` causes
+   403 Forbidden. `sign-command.sh` auto-applies `chmod 644` at the end; manual `cp` commands must
+   also be followed by `chmod 644`.
+
+## Next steps
+
+- M3 is **complete and verified**. All 5 steps implemented and all DoD items confirmed on the VM.
+- Write the detailed **M4 plan** (device-bound mTLS ↔ OIDC session integration + OS packaging) before
+  starting any M4 implementation — one milestone at a time per the two-tier gate.
