@@ -46,22 +46,13 @@ bash lab/reprovision-cert.sh
 certutil -L -d sql:$HOME/.pki/nssdb     # DTL-Ubuntu-Test-Device restored
 ```
 
-### ⚠ Case-(a) [session] line — KNOWN LIMITATION (report, not fixed yet)
-
-The current code **WILL log a [session] line on the nginx-400 page**:
+**Expected log on the 400 page:**
 ```
-[session] device=DTL-Ubuntu-Test-Device user=testuser@dtl.local
+[session] transport blocked — no valid mTLS (HTTP 400)
 ```
-Why: HTTP 400 is a valid HTTP response — Chromium renders the body and fires
-`did-finish-load`. The URL is still `https://localhost:8443` (matches `HOME_URL`),
-so the listener triggers. `deviceCN` is the hardcoded `CERT_SUBJECT_CN` config
-constant, NOT derived from the actual TLS handshake result, so it logs even though
-no cert was actually presented.
-
-**This is misleading** — the line implies device identity was verified when it was not.
-A proper guard would require knowing the HTTP status code or whether
-`select-client-certificate` actually provided a cert. Logged here for approval before
-any logic change.
+The `[session]` line is gated on a 2xx main-frame navigation (`did-navigate`
+`httpResponseCode`). A 400 response triggers the "transport blocked" path instead,
+so a bogus `device=…` identity line is never emitted on the error page.
 
 ---
 
