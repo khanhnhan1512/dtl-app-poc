@@ -26,8 +26,12 @@ export function logBackend() {
  * are consistent. This disambiguates the "is it a timing issue?" question.
  *
  * If encryptString() throws → re-throw so the caller can report FAILED with full detail.
+ *
+ * @param {object} tokenSet - The token set from openid-client.
+ * @param {string} [email]  - User email from userinfo. Optional: if omitted (e.g. on
+ *   token refresh, which returns no userinfo), the previously stored email is preserved.
  */
-export function save(tokenSet) {
+export function save(tokenSet, email) {
   // Sample both values at save() time — which is well inside app.whenReady(), after OIDC
   // completes. This is the LATEST possible point we could call these.
   const available = safeStorage.isEncryptionAvailable()
@@ -39,11 +43,16 @@ export function save(tokenSet) {
     ? tokenSet.expires_at * 1000                            // openid-client: seconds → ms
     : Date.now() + (tokenSet.expires_in ?? 3600) * 1000
 
+  // Preserve existing email on refresh (email is not returned by the refresh grant).
+  // If the caller supplies email, use it; otherwise carry forward whatever is stored.
+  const resolvedEmail = email ?? load()?.email ?? null
+
   const payload = JSON.stringify({
     access:    tokenSet.access_token,
     refresh:   tokenSet.refresh_token ?? null,
     id:        tokenSet.id_token ?? null,
     expiresAt,
+    email:     resolvedEmail,
   })
 
   // DIAGNOSTIC: call encryptString() unconditionally and observe the result.

@@ -9,16 +9,6 @@ import { logBackend, save, getValidAccessToken, load as loadTokens } from './aut
 import { startKillPoller } from './kill/poller.js'
 import { logSessionIdentity } from './session-identity.js'
 
-// Decode email from a stored id_token JWT payload (base64url, no library needed).
-function emailFromIdToken(idToken) {
-  try {
-    const payload = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64url').toString('utf8'))
-    return payload.email ?? null
-  } catch {
-    return null
-  }
-}
-
 app.setName(PRODUCT_NAME)
 
 if (process.env.NODE_ENV !== 'development') {
@@ -47,9 +37,8 @@ async function ensureAuthenticated() {
   const accessToken = await getValidAccessToken(client)
   if (accessToken) {
     console.log('[auth] Valid stored token — no login required (warm start)')
-    // Decode email from stored id_token JWT for session-identity surfacing.
-    const stored = loadTokens()
-    const email = stored?.id ? emailFromIdToken(stored.id) : null
+    // Read email from the persisted token payload (stored at cold login by save(tokenSet, email)).
+    const email = loadTokens()?.email ?? null
     return { ok: true, email }
   }
 
@@ -61,7 +50,7 @@ async function ensureAuthenticated() {
       return { ok: false, email: null }
     }
     console.log('[auth] PASS —', email)
-    save(tokenSet)
+    save(tokenSet, email)   // persist email alongside tokens for warm-start reads
     return { ok: true, email }
   } catch (err) {
     console.error('[auth] Login flow failed:', err.message)
@@ -129,13 +118,18 @@ app.whenReady().then(async () => {
     return
   }
 
-  // M4 Step 1: surface device+user session identity on portal did-finish-load (D-M4-8).
+  // M4 Step 1: surface device+user session identity on portal navigate (D-M4-8).
+  // did-navigate provides URL + httpResponseCode for main-frame navigations. Gate
+  // logSessionIdentity() on 2xx (real mTLS success); emit a transport-blocked line
+  // on non-2xx (e.g. HTTP 400 no-cert) so the log never implies a bogus device identity.
   // Register BEFORE createShell() so the listener is in place when the portalView is created.
-  // URL guard ensures we log only for the portal (HOME_URL), not the chrome renderer view.
   app.on('web-contents-created', (_e, wc) => {
-    wc.on('did-finish-load', () => {
-      if (wc.getURL().startsWith(HOME_URL)) {
+    wc.on('did-navigate', (_nav, url, httpResponseCode) => {
+      if (!url.startsWith(HOME_URL)) return
+      if (httpResponseCode >= 200 && httpResponseCode < 300) {
         logSessionIdentity({ deviceCN: CERT_SUBJECT_CN, userEmail: sessionEmail ?? 'unknown' })
+      } else {
+        console.log(`[session] transport blocked — no valid mTLS (HTTP ${httpResponseCode})`)
       }
     })
   })
