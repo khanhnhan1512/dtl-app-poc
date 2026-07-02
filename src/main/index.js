@@ -2,11 +2,22 @@ import { app, Menu } from 'electron'
 import { handleCertSelect } from './cert-select.js'
 import { wipe } from './wipe.js'
 import { createShell } from './window.js'
-import { PRODUCT_NAME, OIDC } from './config.js'
+import { PRODUCT_NAME, OIDC, HOME_URL, CERT_SUBJECT_CN } from './config.js'
 import { getOidcClient } from './auth/oidc.js'
 import { runLoginFlow } from './auth/login-flow.js'
-import { logBackend, save, getValidAccessToken } from './auth/token-store.js'
+import { logBackend, save, getValidAccessToken, load as loadTokens } from './auth/token-store.js'
 import { startKillPoller } from './kill/poller.js'
+import { logSessionIdentity } from './session-identity.js'
+
+// Decode email from a stored id_token JWT payload (base64url, no library needed).
+function emailFromIdToken(idToken) {
+  try {
+    const payload = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64url').toString('utf8'))
+    return payload.email ?? null
+  } catch {
+    return null
+  }
+}
 
 app.setName(PRODUCT_NAME)
 
@@ -18,12 +29,13 @@ app.on('select-client-certificate', handleCertSelect)
 
 /**
  * Ensure a valid access token exists before the shell is created.
- * - Valid stored token  → returns true immediately (warm start, no browser).
+ * - Valid stored token  → returns { ok: true, email } immediately (warm start, no browser).
  * - No/expired token   → runs the full OIDC flow in the system browser, persists the
- *                        new token set, and returns true.
- * - Domain rejected / flow failure / save failure → logs the reason and returns false.
+ *                        new token set, and returns { ok: true, email }.
+ * - Domain rejected / flow failure / save failure → returns { ok: false, email: null }.
  *
- * Criterion 4: createShell() is only called when this returns true.
+ * Criterion 4: createShell() is only called when ok is true.
+ * email is used for session-identity surfacing (M4 Step 1 — observability only).
  */
 async function ensureAuthenticated() {
   logBackend()
@@ -35,7 +47,10 @@ async function ensureAuthenticated() {
   const accessToken = await getValidAccessToken(client)
   if (accessToken) {
     console.log('[auth] Valid stored token — no login required (warm start)')
-    return true
+    // Decode email from stored id_token JWT for session-identity surfacing.
+    const stored = loadTokens()
+    const email = stored?.id ? emailFromIdToken(stored.id) : null
+    return { ok: true, email }
   }
 
   console.log('[auth] No valid token — starting OIDC flow')
@@ -43,14 +58,14 @@ async function ensureAuthenticated() {
     const { tokenSet, email, allowed } = await runLoginFlow()
     if (!allowed) {
       console.error('[auth] REJECTED — email domain mismatch:', email)
-      return false
+      return { ok: false, email: null }
     }
     console.log('[auth] PASS —', email)
     save(tokenSet)
-    return true
+    return { ok: true, email }
   } catch (err) {
     console.error('[auth] Login flow failed:', err.message)
-    return false
+    return { ok: false, email: null }
   }
 }
 
@@ -107,12 +122,23 @@ app.whenReady().then(async () => {
   }
 
   // ── Normal launch: gate portal on authentication (M2 Step 4) ───────────────────────
-  const authenticated = await ensureAuthenticated()
+  const { ok: authenticated, email: sessionEmail } = await ensureAuthenticated()
   if (!authenticated) {
     console.error('[auth] Authentication failed — portal will not load (criterion 4)')
     app.quit()
     return
   }
+
+  // M4 Step 1: surface device+user session identity on portal did-finish-load (D-M4-8).
+  // Register BEFORE createShell() so the listener is in place when the portalView is created.
+  // URL guard ensures we log only for the portal (HOME_URL), not the chrome renderer view.
+  app.on('web-contents-created', (_e, wc) => {
+    wc.on('did-finish-load', () => {
+      if (wc.getURL().startsWith(HOME_URL)) {
+        logSessionIdentity({ deviceCN: CERT_SUBJECT_CN, userEmail: sessionEmail ?? 'unknown' })
+      }
+    })
+  })
 
   createShell()
 
