@@ -139,17 +139,19 @@ These are the "get it right now or pay later" items; they map directly onto the 
 
 ## M4 — Linux MVP: device+user session surfacing + .deb packaging
 
-- **Goal:** Complete the Linux PoC as a shippable MVP — explicit device and user session visible in the
-  shell, and a distributable `.deb` package.
-- **Delivers:** user identity (email / display name from OIDC claims) + device identity (`CN=DTL-Ubuntu-
-  Test-Device` from mTLS) surfaced in the shell UI; `electron-builder` config → **AppImage** (primary)
-  + **.deb**; OS-level branding (app icon, `.desktop` entry); documented install + cert-provisioning
-  steps; **unsigned** (no code-signing per I2).
+- **Goal:** Complete the Linux PoC as a shippable MVP — both identity layers observable in one place,
+  and a distributable `.deb` package.
+- **Delivers:** a `[session]` log line fired on the portal's `did-finish-load` event that surfaces
+  `device=<CN>` (from the mTLS cert) and `user=<email>` (from the OIDC token) together — observability
+  of the layered identity, not cryptographic binding (that is a post-PoC hardening item);
+  `electron-builder` config → **.deb**; OS-level branding (app icon, `.desktop` entry); documented
+  install + cert-provisioning steps; **unsigned** (no code-signing per I2).
 - **Depends on:** M1–M3 (packages the fully integrated app).
 - **Done when:**
-  1. Shell displays the authenticated user's email + the device CN — both layers of identity visible.
-  2. A clean build command emits an AppImage and a `.deb`.
-  3. Launched from the package on a clean Ubuntu, all features work end-to-end: OIDC login → branded
+  1. Portal load emits `[session] device=DTL-Ubuntu-Test-Device user=testuser@dtl.local` — both
+     identity layers visible in a single log line (D-M4-4: log-line surfacing, not UI rendering).
+  2. A clean build command emits a `.deb`.
+  3. Launched from the `.deb` on a clean Ubuntu, all features work end-to-end: OIDC login → branded
      kiosk shell → mTLS to the test fixture → signed remote wipe (incl. OS-store cert).
   4. README documents install, out-of-band `pk12util` cert-provisioning, and how to trigger the kill.
 
