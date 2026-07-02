@@ -137,36 +137,82 @@ These are the "get it right now or pay later" items; they map directly onto the 
   4. Build-time config (allow-list, home URL, mTLS domains, branding) is sourced as designed (baked-in
      acceptable per G3); the kill flag is the one live signal.
 
-## M4 — Ubuntu packaging: AppImage (+ optional .deb), unsigned
+## M4 — Linux MVP: device+user session surfacing + .deb packaging
 
-- **Goal:** Produce a runnable Ubuntu build of the full vertical slice — the second half of the DoD.
-- **Delivers:** `electron-builder` config → **AppImage** (primary) + optional **.deb**; OS-level
-  branding (app icon, desktop entry); documented run + cert-provisioning steps; **unsigned** (no
-  code-signing, per techstack §2 / I2).
-- **Depends on:** M1–M3 (packages the integrated app).
+- **Goal:** Complete the Linux PoC as a shippable MVP — explicit device and user session visible in the
+  shell, and a distributable `.deb` package.
+- **Delivers:** user identity (email / display name from OIDC claims) + device identity (`CN=DTL-Ubuntu-
+  Test-Device` from mTLS) surfaced in the shell UI; `electron-builder` config → **AppImage** (primary)
+  + **.deb**; OS-level branding (app icon, `.desktop` entry); documented install + cert-provisioning
+  steps; **unsigned** (no code-signing per I2).
+- **Depends on:** M1–M3 (packages the fully integrated app).
 - **Done when:**
-  1. A clean build command emits an AppImage (and optionally a `.deb`).
-  2. Launched from the AppImage on a clean-ish Ubuntu, all features work end-to-end: OIDC login →
-     branded kiosk shell → mTLS to the test fixture → signed remote wipe (incl. the OS-store cert).
-  3. README documents install, the out-of-band `pk12util` cert-provisioning step, and how to trigger
-     the kill switch.
+  1. Shell displays the authenticated user's email + the device CN — both layers of identity visible.
+  2. A clean build command emits an AppImage and a `.deb`.
+  3. Launched from the package on a clean Ubuntu, all features work end-to-end: OIDC login → branded
+     kiosk shell → mTLS to the test fixture → signed remote wipe (incl. OS-store cert).
+  4. README documents install, out-of-band `pk12util` cert-provisioning, and how to trigger the kill.
 
 ---
 
-## Secondary target (not a gated milestone)
+## Desktop platform track — M5 + M6 (one Electron codebase, two OS seams)
 
-**Windows** is the secondary platform. Same Electron codebase; the only OS-specific deltas are the
-**cert store** (Windows `CurrentUser\My` via `certutil -importpfx` / `Import-PfxCertificate`, plus a
-Windows-store delete in the wipe) and **packaging** (NSIS). Per the DoD (B), the gated PoC target is
-the **Ubuntu** test build; Windows is validated only after Ubuntu works end-to-end.
+The desktop app is **one Electron codebase**. Only two seams vary per OS: the cert store adapter and
+the packaging target. All app logic — OIDC flow, kiosk shell, allow-list, kill switch, `contracts/`
+wire formats — is **shared unchanged** across Linux, Windows, and macOS.
 
-**Mobile / macOS** remain tabled. Reminder (techstack §4): iOS forces WKWebView — the Electron codebase
-**will not port**, so mobile would be a separate track. The day it returns, the long pole is iOS
-WKWebView mTLS (its own spike). The cross-cutting "decouple security logic from UI" note above is the
-only concession made now.
+M5 is the natural point to formalize a small **`CertStore` interface** (three methods: `present(url)`,
+`select(cert)`, `delete(nickname)`) with the NSS/`certutil` impl (Linux, already exists) and a Windows
+impl. M6 adds the third impl (macOS Keychain). Deferring this abstraction until a second real platform
+exists is correct YAGNI discipline.
+
+## M5 — Windows integration + .exe packaging
+
+- **Goal:** Port the Linux PoC to Windows — same Electron codebase, Windows cert-store adapter and
+  NSIS installer.
+- **Cert store seam:** mTLS client cert lives in the **Windows Certificate Store** (`CurrentUser\My`);
+  provision via `certutil -importpfx` / `Import-PfxCertificate`; wipe path deletes from the Windows
+  store (the Windows analogue of Linux `certutil -F -n ... -d sql:~/.pki/nssdb`).
+- **Packaging seam:** `electron-builder` NSIS target → **`.exe` installer**, unsigned.
+- **Formalize `CertStore` interface:** introduce a small adapter (present / select / delete) with an
+  NSS impl (wraps existing Linux code) and a Windows impl. No other layer changes.
+- **Depends on:** M4 (Linux MVP verified end-to-end).
+- **Done when:**
+  1. The Windows cert-store adapter provisions, presents (mTLS handshake succeeds), and deletes
+     (wipe locks out) the device cert — matching the M0 Linux acceptance criteria on Windows.
+  2. `.exe` installer produced; all M1–M4 features work end-to-end on Windows.
+  3. `CertStore` interface is clean: swapping the adapter does not touch app logic.
+
+## M6 — macOS integration + .dmg packaging
+
+- **Goal:** Add macOS as the third desktop target — Keychain adapter and `.dmg`.
+- **Note:** macOS is on the **desktop/Electron track**, not the mobile track. A common misgrouping
+  lumps macOS with iOS; they are separate: iOS prohibits Chromium entirely (WKWebView only) — a
+  different codebase. macOS runs Electron normally.
+- **Cert store seam:** client cert/identity stored in the **macOS Keychain**; wipe path deletes from
+  Keychain — the third `CertStore` implementation.
+- **Packaging seam:** `.dmg`, unsigned (notarization / code-signing deferred as a hardening item).
+- **Depends on:** M5 (`CertStore` interface already formalized).
+- **Done when:**
+  1. macOS Keychain adapter provisions, presents (mTLS handshake succeeds), and deletes (wipe locks
+     out) the device cert.
+  2. `.dmg` produced; all M1–M4 features work end-to-end on macOS.
+
+---
+
+## Mobile track (separate codebase — not a desktop extension)
+
+iOS prohibits Chromium → the Electron codebase **will not port to iOS**. Mobile is a **separate
+codebase** if it ever begins. Flutter is a candidate unifier (pending an iOS WKWebView mTLS spike —
+that is the long pole: iOS mTLS client-cert selection via `WKURLSchemeHandler` / `URLSession` is
+largely untrodden).
+
+The true shared artifact across desktop and mobile is the **`contracts/` layer** (language-neutral wire
+formats — `kill-command.md` is the first). *Not* shared TypeScript; the contracts describe what any
+platform must implement, not how.
 
 ## Explicitly out of scope (carried from brainstorm)
 
 DLP (download / DevTools / copy-paste / screenshot blocking) · real PKI & in-app cert
 re-provisioning (D4) · true device uninstall / MDM · production management backend · code-signing ·
-auto-update · mobile & macOS.
+auto-update · iOS / Android.
