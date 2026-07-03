@@ -41,4 +41,4 @@ linux:
   category: Network
 
 # No auto-update server in this PoC.
-publish: null
+publish:
