@@ -1,0 +1,44 @@
+appId: com.dtl.app
+productName: DTL App
+copyright: Copyright © 2025 DyTech Lab
+
+directories:
+  output: dist
+
+# Explicit include-list — ONLY the vite-compiled output + the runtime dep tree.
+# openid-client (in dependencies) is externalised by electron-vite's externalizeDepsPlugin,
+# so its transitive deps must be listed here. Complete tree at this lockfile:
+#   openid-client 5.7.1 → jose, lru-cache, object-hash, oidc-token-hash
+#   lru-cache → yallist
+# Belt-and-suspenders excludes follow — redundant given the include-list, but explicit about intent.
+files:
+  - "out/**"
+  - "package.json"
+  - "node_modules/openid-client/**"
+  - "node_modules/jose/**"
+  - "node_modules/lru-cache/**"
+  - "node_modules/object-hash/**"
+  - "node_modules/oidc-token-hash/**"
+  - "node_modules/yallist/**"
+  - "!lab/**"
+  - "!src/**"
+  - "!plans/**"
+  - "!docs/**"
+  - "!contracts/**"
+  - "!**/*.key"
+  - "!**/*.pem"
+  - "!**/*.p12"
+  - "!**/tokens.enc"
+  - "!**/kill-ledger.json"
+  - "!**/.env"
+
+linux:
+  target:
+    - target: deb
+      arch:
+        - x64
+  icon: src/renderer/assets/logo.png
+  category: Network
+
+# No auto-update server in this PoC.
+publish: null

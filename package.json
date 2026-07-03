@@ -1,20 +1,24 @@
 {
   "name": "dtl-app",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "productName": "DTL App",
   "description": "DTL managed enterprise browser PoC",
+  "author": "DyTech Lab <noreply@dtl.local>",
+  "homepage": "https://dtl.local",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "wipe": "electron-vite build && electron . --wipe"
+    "wipe": "electron-vite build && electron . --wipe",
+    "dist:deb": "electron-vite build && electron-builder --linux deb"
   },
   "dependencies": {
     "openid-client": "5.7.1"
   },
   "devDependencies": {
     "electron": "^42.0.0",
+    "electron-builder": "25.0.0",
     "electron-vite": "^2.0.0"
   }
 }
