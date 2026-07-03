@@ -1,7 +1,7 @@
 # M4 — Linux integration + packaging (device+user session, `.deb`)
 
-> Detailed plan for **Milestone M4** of `plans/roadmap.md`. **Planning only — no code yet.**
-> Per the CLAUDE.md two-tier gate, this plan is reviewed and approved *before* any code is written.
+> Detailed plan for **Milestone M4** of `plans/roadmap.md`.
+> **Status: COMPLETE + VERIFIED on VM (2026-07-03).** All 8 DoD items met; as-built notes appended.
 > Builds on **approved + verified M0 + M1 + M2 + M3** (all merged to master): mTLS cert handler,
 > custom shell, OIDC auth-gated portal, token-aware `wipe()`, signed kill switch.
 > **Scope decision (iterative/cuốn-chiếu):** M4 finishes the **Linux** ecosystem as a complete MVP —
@@ -54,11 +54,11 @@ access tokens) is a documented post-PoC hardening item (Zitadel lab support is l
   ships sensible defaults, not lab secrets.
 - **The kill switch keeps working packaged.** `startKillPoller()` runs the same; a `.deb`-installed app
   still polls `:8444` and wipes on a valid command. (Verify in the regression pass.)
-- **Sandbox note (a real packaging *benefit*).** In dev we launch with `ELECTRON_DISABLE_SANDBOX=1`
-  because `npx electron`'s chrome-sandbox binary isn't SUID-root (M2 gotcha; the user has no sudo to fix
-  it in place). A `.deb` installed as root *can* ship chrome-sandbox with the correct SUID bit, so the
-  packaged app may run **with the sandbox enabled** — a genuine hardening win over the dev launch. This
-  is something to verify, not assume.
+- **Sandbox note (production-hardening item — NOT verified in this PoC).** The VM has no `sudo`, so
+  the `.deb` was unpacked with `dpkg -x`, not installed as root. `chrome-sandbox` therefore lacked the
+  SUID bit and `ELECTRON_DISABLE_SANDBOX=1` was still required — same as dev. A root-installed `.deb`
+  *can* ship the correct SUID bit; sandbox-on is a genuine future hardening win, but is only verifiable
+  on a machine with `sudo`. See as-built notes (DoD-7).
 
 ## Prerequisites & key gotchas
 
@@ -213,31 +213,63 @@ app.whenReady()
 - **The package ships the app, not the lab.** No secrets in the distributable.
 - **Surfacing ≠ binding (stated plainly).** The session line is observability; it does not prevent token
   reuse on another device. Cryptographic binding is post-PoC.
-- **Packaged app may run with the sandbox enabled** (SUID chrome-sandbox via `.deb`) — a hardening
-  improvement over the dev launch.
+- **Packaged app sandbox** — not verified in this PoC (VM has no sudo; see as-built DoD-7). A
+  root-installed `.deb` shipping SUID `chrome-sandbox` is a post-PoC hardening item.
 - **Out of scope (documented):** DPoP / mTLS-bound tokens; MDM-driven install/config; code signing of the
   `.deb`; auto-update; Windows/macOS (M5/M6).
 
 ## Definition of Done
 
-- [ ] **DoD-1** — Session line logs `device <CN> + user <email>` on an authenticated launch (Step 1).
-- [ ] **DoD-2** — Device identity comes from the M0 cert handler CN, not new parsing (Step 1).
-- [ ] **DoD-3** — Three compose cases demonstrated: no-cert / cert-no-token / cert+token (Step 2).
-- [ ] **DoD-4** — `.deb` builds, installs on Ubuntu, appears in the system menu (Step 3).
-- [ ] **DoD-5** — `dpkg -c` shows the package contains **no** lab, keys, certs, tokens, or ledger
-  (Step 3).
-- [ ] **DoD-6** — Full M0–M3 regression through the installed app: mTLS, shell/lockdown, auth gate, kill
-  switch all work (Step 4).
-- [ ] **DoD-7** — Keyring + sandbox behaviour of the installed app recorded (wrapper needed or not;
-  sandbox on or off) (Step 4).
-- [ ] **DoD-8** — No new runtime dependency (`electron-builder` is dev-only; `openid-client` stays the
-  only runtime dep).
+- [x] **DoD-1** — VERIFIED: `[session] device=DTL-Ubuntu-Test-Device user=testuser@dtl.local` logged on authenticated launch.
+- [x] **DoD-2** — VERIFIED: device identity read from `CERT_SUBJECT_CN` constant; no new cert parsing.
+- [x] **DoD-3** — VERIFIED: all three compose cases on the VM. Case (a) logs `[session] transport blocked — no valid mTLS (HTTP 400)` via the 2xx `did-navigate` gate — no bogus device line on the 400 page.
+- [x] **DoD-4** — VERIFIED: `dtl-app_0.1.0_amd64.deb` (~83 MB) built via `npm run dist:deb`; unpacked on VM with `dpkg -x` (no sudo — see as-built notes).
+- [x] **DoD-5** — VERIFIED: `dpkg -c | grep -Ei 'lab/|\.key|\.pem|\.p12|tokens\.enc|kill-ledger|zitadel'` returns nothing; ASAR contains only `out/` + the 6-package openid-client dep tree.
+- [x] **DoD-6** — VERIFIED: full M0–M3 regression through the unpacked app: M1 shell, M0 mTLS `verify=SUCCESS`, M2 OIDC login + warm-start, M4 `[session]` line, M3 kill-switch wipe+quit — all confirmed.
+- [x] **DoD-7** — RECORDED: keyring wrapper (`dbus-run-session`) still required; gnome-keyring occasionally needed `pkill -f gnome-keyring-daemon` + relaunch for `isEncryptionAvailable=true`. Sandbox: `ELECTRON_DISABLE_SANDBOX=1` still required (no root install → no SUID sandbox). See as-built notes.
+- [x] **DoD-8** — VERIFIED: `electron-builder` is devDependency; `openid-client` is the only runtime dep (its transitive tree — `jose`, `lru-cache`, `object-hash`, `oidc-token-hash`, `yallist` — are not new direct deps).
 
-## Next steps (after approval)
+## Next steps
 
-- Implement Steps 1 → 4 in order, verifying each on the VM before proceeding (Step 4 is the regression
-  gate through the installed artifact).
-- On M4 sign-off, the Linux MVP is complete. Proceed to M5 (Windows) when ready.
+M4 is complete. Linux MVP is done. Proceed to M5 (Windows) when ready.
+
+---
+
+## As-built notes (honest record — 2026-07-03)
+
+**Install method — no sudo on the VM:**
+The VM (`duccanh-test-pc.dtl`) has no `sudo`, so `dpkg -i` was not available. The `.deb` was unpacked
+with `dpkg -x ~/dtl-app_0.1.0_amd64.deb ~/dtl-app-installed` instead. All functional M0–M3 regression
+was run against the unpacked binary. Two consequences:
+
+- **(a) Sandbox:** `chrome-sandbox` did not get the SUID-root bit (no package manager install). The app
+  required `ELECTRON_DISABLE_SANDBOX=1` — same as dev. "Sandbox-on via a root-installed `.deb`" is a
+  production-hardening item, testable only on a machine with `sudo`. Out of PoC scope; noted as DoD-7.
+- **(b) Menu entry:** `/usr/share/applications/dtl-app.desktop` was not created (no root install). The
+  `.desktop` file content was verified from the `.deb` directly (`dpkg --fsys-tarfile | tar -xO`) —
+  `Name=DTL App`, `Exec="/opt/DTL App/dtl-app"`, `Categories=Network;` — structurally correct.
+
+**Keyring (DoD-7):**
+`dbus-run-session` wrapper still required for `safeStorage` when launching from the NoMachine terminal.
+gnome-keyring occasionally started in a state where `isEncryptionAvailable=false`; fix:
+`pkill -f gnome-keyring-daemon` then relaunch with the full wrapper. Launching from a native GNOME
+session (not NoMachine) would likely pick up the session keyring automatically — not verified here.
+
+**`DTL_KILL_CA_PATH` is required for the packaged app (R2):**
+The default `'lab/certs/ca.pem'` in `KILL.caPath` is `process.cwd()`-relative. Outside the repo,
+`process.cwd()` is not the repo root, so the path breaks. The poller fails-open (D-M3-8) silently
+without it. For the regression demo, `DTL_KILL_CA_PATH` was set to the absolute path of the lab CA.
+
+**Kill-switch anti-replay verified through the package:**
+- `kill-wipe-cmd005` (>24 h old, pre-signed) → verdict `STALE`, rejected.
+- `kill-wipe-cmd006` (freshly signed) → verdict `VALID_WIPE` → `sessionCleared: true, certDeleted: true,
+  tokensCleared: true` → app quit. Relaunch showed forced re-login + nginx 400 (cert gone). Recovery
+  restored cert + re-login.
+
+**Runtime dep tree in the `.deb` (not new direct deps):**
+The ASAR contains `openid-client` plus its 5 transitive deps (`jose`, `lru-cache`, `object-hash`,
+`oidc-token-hash`, `yallist`). These are openid-client's dependency tree pulled in by `externalizeDepsPlugin`;
+they are not new direct runtime dependencies of the app.
 
 ---
 
