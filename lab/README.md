@@ -2,7 +2,25 @@
 
 Local HTTPS test endpoints for M0 spike + M1 Step 2 navigation verification. All scripts are idempotent.
 
-## Run order
+## ⚡ One-command bring-up (preferred)
+
+```bash
+bash lab/setup.sh      # certs → NSS → nginx(:8443/:8444/:8445) → Postgres → Zitadel → auto-seed app+user
+bash lab/run-app.sh    # launch the app (NoMachine DESKTOP terminal) — one command, no keyring prompt
+bash lab/teardown.sh   # remove all app/test traces (keeps prerequisites: node/podman/libnss3-tools/...)
+```
+
+`setup.sh` stands up the whole lab AND auto-seeds Zitadel (Project + Native PKCE App +
+`testuser@dtl.local`) with **zero web-console clicks**, writing the fresh `client_id` into
+`lab/.runtime-env` (git-ignored). `run-app.sh` then sources that env and unlocks the OS keyring
+**silently** (empty password — no "Unlock Keyring" dialog; it keeps real `gnome_libsecret`
+encryption, it does NOT downgrade to `--password-store=basic`). Full design + empirical proof:
+`plans/handoff-prep-spike.md`. **⚠️ First `setup.sh` run is a one-way door** — it destroys any
+existing manually-seeded Zitadel (and clears the OS login keyring) and re-seeds from scratch.
+
+The manual step-by-step below is kept as reference / fallback for machines where `setup.sh` can't run.
+
+## Run order (manual — fallback)
 
 ```bash
 # 1. Generate certs (once per machine)

@@ -314,11 +314,18 @@ to M3 or later. The app auto-opens the system browser when no valid token exists
    **WORKING SOLUTION (verified):** wrap the app in `dbus-run-session` from the NoMachine terminal:
    ```
    dbus-run-session -- bash -c '
-     eval $(gnome-keyring-daemon --start --components=secrets)
+     eval $(echo -n "" | gnome-keyring-daemon --unlock --components=secrets,pkcs11,ssh)
+     python3 lab/ensure-keyring.py
      GNOME_DESKTOP_SESSION_ID=this-is-deprecated ELECTRON_DISABLE_SANDBOX=1 \
        ./node_modules/.bin/electron . [args]
    '
    ```
+   *(Updated post-M4/handoff-spike: `--unlock` (empty password) replaces `--start` so no "Unlock
+   Keyring" dialog appears; `ensure-keyring.py` additionally uses the very
+   `InternalUnsupportedGuiltRiddenInterface` referenced above (its `CreateWithMasterPassword` method)
+   to create the default collection with an empty password when none exists — otherwise `--unlock`
+   alone leaves a "Choose password for NEW keyring" dialog on a fresh machine. See `lab/run-app.sh`.
+   NOT `--password-store=basic`, which would downgrade encryption.)*
    Result: `gnome_libsecret` backend, `isEncryptionAvailable()=true`, `tokens.enc` is real
    Chromium OSCrypt binary (v11 header, not human-readable).
 

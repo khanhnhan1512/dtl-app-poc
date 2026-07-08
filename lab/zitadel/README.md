@@ -9,7 +9,69 @@ Admin creds (throwaway local only — not real secrets):
 - Password: `Admin12345!`
 
 Loopback callback port the Electron app will use: **`51234`**
-(registered as `http://127.0.0.1:51234/callback` in Zitadel — see Manual steps below).
+(registered as `http://127.0.0.1:51234/callback` in Zitadel).
+
+---
+
+## ⚡ AUTOMATED PATH (preferred) — `lab/setup.sh`
+
+**The manual BRING UP + MANUAL web-console steps below are now superseded by `lab/setup.sh`**, which
+stands up the *entire* lab (certs, NSS, nginx, Postgres, Zitadel) **and auto-seeds** the Project +
+Native PKCE App + `testuser@dtl.local` with **zero web-console clicks**. It writes the fresh
+`client_id` into `lab/.runtime-env` (per-machine, git-ignored). Mechanism + empirical proof:
+`plans/handoff-prep-spike.md`.
+
+```bash
+cd ~/Downloads/dtl-app
+bash lab/setup.sh        # one command — certs → nginx(:8443/:8444/:8445) → Zitadel → seeded app+user
+```
+
+> **⚠️ ONE-WAY DOOR:** `setup.sh` starts by tearing down any existing manually-seeded Zitadel and
+> re-seeding from a clean Postgres volume (reproducible-from-scratch). Running it **destroys the old
+> hand-built instance and its hand-copied `client_id`** — only run it when you're ready to switch.
+
+**Launch after setup — one command, no keyring prompt** (run from the NoMachine DESKTOP terminal):
+
+```bash
+cd ~/Downloads/dtl-app
+bash lab/run-app.sh          # sources lab/.runtime-env + unlocks the keyring silently → launches
+```
+
+`run-app.sh` is the single source of truth for the launch wrapper. It sources `lab/.runtime-env`
+(fresh `client_id` + absolute `DTL_KILL_CA_PATH` — a `.deb` never reads a build-time `.env`), then
+does a **two-step keyring bootstrap** so `safeStorage` gets a real `gnome_libsecret` backend with
+**no GUI dialog of any kind** — neither "Unlock Keyring" nor "Choose password for NEW keyring":
+
+```bash
+# 1. Unlock any EXISTING default collection with an empty password (no-op if none exists yet).
+eval $(echo -n "" | gnome-keyring-daemon --unlock --components=secrets,pkcs11,ssh)
+# 2. If no default collection exists at all, CREATE one with an empty password — non-interactively.
+#    (--unlock alone does NOT do this: it only unlocks, confirmed empirically. Without this step,
+#    the app's first safeStorage write hits the Secret Service's normal create-collection path,
+#    which pops the interactive gcr-prompter "Choose password for NEW keyring" dialog.)
+python3 lab/ensure-keyring.py
+# Do NOT swap either step for --password-store=basic: that bypasses the OS keyring and DOWNGRADES
+# token encryption. We remove only the PROMPT (an environment property), never the encryption.
+```
+
+`lab/ensure-keyring.py` uses the legacy `org.gnome.keyring.InternalUnsupportedGuiltRiddenInterface
+.CreateWithMasterPassword` D-Bus method — the one escape hatch that creates a collection with a
+given password (here: empty) with **zero prompt**, unlike the normal `CreateCollection` path.
+Verified end-to-end on this VM: fresh box (`~/.local/share/keyrings/` removed entirely), across
+multiple independent relaunches — zero prompts, secrets store and read back correctly every time.
+
+> Requires `python3-dbus` (checked by `lab/setup.sh` preflight). If you ever hit a keyring dialog
+> anyway, run `bash lab/teardown.sh` then `bash lab/setup.sh` to reset to the verified clean state.
+>
+> Packaged `.deb`: `DTL_APP_BIN="<unpacked>/opt/DTL App/dtl-app" bash lab/run-app.sh`.
+
+Tear it all back down (returns the VM to "never ran DTL App"): `bash lab/teardown.sh`.
+
+> The manual `podman run` BRING UP and the click-through **MANUAL — Zitadel web UI steps** further
+> below are kept only as **fallback / reference** for a machine where `setup.sh` can't run. On a normal
+> VM, use `setup.sh` and skip them.
+
+---
 
 > **VM-specific note:** `podman compose` fails on this VM due to rootless systemd D-Bus issues
 > (pod cgroups + bridge network routing both fail). The `podman run` commands below are the
@@ -19,13 +81,17 @@ Loopback callback port the Electron app will use: **`51234`**
 > **Image pinning:** Use `v2.71.10` — do NOT use `:latest` (v4 moved the login UI to a separate
 > "Login V2" app; `/ui/console` returns 404 in a single-container setup).
 
-> **safeStorage / `--password-store=basic` (NoMachine sessions):** In a NoMachine remote session the
-> gnome-keyring daemon is not auto-unlocked, so `safeStorage.isEncryptionAvailable()` returns `false`
-> and `encryptString()` throws. The fix is to run Electron with `--password-store=basic`, which forces
-> the built-in `basic_text` backend (no keyring needed, `isEncryptionAvailable()` returns `true`).
-> Tokens are Chromium-encrypted with the basic_text key (obfuscated, not keyring-backed — Decision 8 /
-> F4 PoC limitation; acceptable for PoC). On a physical desktop with an unlocked gnome-keyring, omit the
-> flag and safeStorage uses libsecret automatically (real OS keyring encryption).
+> **safeStorage (NoMachine sessions):** In a NoMachine remote session the gnome-keyring daemon is not
+> auto-unlocked, so `safeStorage.isEncryptionAvailable()` returns `false` and `encryptString()` throws.
+> **The correct fix is the `lab/run-app.sh` wrapper** — a private `dbus-run-session` + a non-interactive
+> `gnome-keyring-daemon --unlock` (empty password) **plus `lab/ensure-keyring.py`** (creates the default
+> collection with an empty password if none exists — `--unlock` alone only unlocks an *existing* one).
+> Together they open a real `gnome_libsecret` keyring **silently** and give `isEncryptionAvailable() =
+> true` with **no dialog of any kind** (neither "Unlock Keyring" nor "Choose password for NEW keyring").
+> Do **NOT** use `--password-store=basic`: it forces the `basic_text` backend and **downgrades** token
+> encryption off the OS keyring (an app-feature downgrade, not just an environment tweak). We keep real
+> keyring encryption and remove only the *prompt*. On a physical desktop with an already-unlocked
+> gnome-keyring, the plain launch works and safeStorage uses libsecret automatically.
 
 ---
 
@@ -251,21 +317,33 @@ the bus name and selects `gnome_libsecret` backend, but `isEncryptionAvailable()
 ### The working command (NoMachine desktop terminal only)
 
 **Must run in the NoMachine terminal** — needs the session's `DISPLAY`. Do not run over SSH.
+Prefer `bash lab/run-app.sh` (the automated path above); the expanded form is shown here for
+reference. Note the two-step keyring bootstrap — `--unlock` (empty password) **plus**
+`ensure-keyring.py` — **not** `--start` alone, so **no dialog of any kind** appears (see the
+automated-path section above for why `--unlock` alone isn't enough, and why NOT `--password-store=basic`):
 
 ```bash
 cd ~/Downloads/dtl-app
+source lab/.runtime-env
 
 dbus-run-session -- bash -c '
-  eval $(gnome-keyring-daemon --start --components=secrets)
+  eval $(echo -n "" | gnome-keyring-daemon --unlock --components=secrets,pkcs11,ssh)
+  python3 lab/ensure-keyring.py
   GNOME_DESKTOP_SESSION_ID=this-is-deprecated ELECTRON_DISABLE_SANDBOX=1 \
     ./node_modules/.bin/electron . --login
 '
 ```
 
-`dbus-run-session` creates a private D-Bus session bus. `gnome-keyring-daemon --start`
-registers the full `org.freedesktop.secrets.Service` on it (this time WITH `DISPLAY` set, so
-it initialises the full interface). Electron, launched into the same private bus, selects
-`gnome_libsecret` and gets `isEncryptionAvailable() = true`.
+`dbus-run-session` creates a private D-Bus session bus. `gnome-keyring-daemon --unlock` (empty
+password on stdin) registers the full `org.freedesktop.secrets.Service` on it and unlocks the
+default collection **if one already exists**. `ensure-keyring.py` then handles the case that trips
+up `--unlock` alone: if NO default collection exists yet (e.g. right after `lab/teardown.sh`, or on
+a machine that never had one), it creates one with an empty password via the legacy
+`CreateWithMasterPassword` D-Bus call — the one creation path with **no GUI prompt**. Electron,
+launched into the same private bus, then selects `gnome_libsecret` and gets
+`isEncryptionAvailable() = true` with zero dialogs. (`--start` alone pops an "Unlock Keyring" dialog
+when locked; `--unlock` alone without `ensure-keyring.py` pops a "Choose password for NEW keyring"
+dialog when no collection exists yet — both confirmed empirically and both eliminated by this pairing.)
 
 Expected output:
 ```

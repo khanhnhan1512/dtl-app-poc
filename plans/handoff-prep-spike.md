@@ -98,6 +98,63 @@ doesn't exist), no Terraform, no console. This is the mechanism the plan commits
     Zitadel PAT output file (`lab/zitadel/.seed/` or similar) are added to `.gitignore`. Existing
     ignores already cover `lab/certs/*`, `lab/kill/*.key`, `lab/zitadel/.env`, `lab/zitadel/data/`.
     R1 secret-leak discipline (same as the `.deb` packaging) applies to the commit of these scripts.
+12. **R6 resolved = DISCARD (not detect-and-preserve).** `setup.sh`'s clean-slate step tears down and
+    re-seeds the existing manually-configured Zitadel on 8090; reproducible-from-scratch is the whole
+    point, and a preserve branch would undermine the clean-slate guarantee (Decision 4). Since the
+    script is proven repeatable, a working replacement is guaranteed. **⚠️ The FIRST `setup.sh` run is
+    a ONE-WAY DOOR for the manual instance** — the hand-built M2 Zitadel (and its hand-copied
+    `client_id`) is destroyed and cannot be recovered. Only run `setup.sh` once the script is complete
+    and you're ready to switch to the auto-seeded instance. The old `client_id` literal in `config.js`
+    survives only as a now-overridden fallback (runtime-env wins).
+13. **Redirect-URI is an explicit match checkpoint; `config.js` is the single source of truth.** A
+    Native App whose registered redirect ≠ the app's `OIDC.redirectUri` fails `authorize` with a
+    redirect_uri error. Confirmed the default is grep-extractable from `config.js`
+    (`http://127.0.0.1:51234/callback`). `setup.sh` extracts it from `config.js` and passes it to
+    `seed-zitadel.sh`, which (a) registers *exactly* that redirect, and (b) **re-fetches the seeded app
+    and asserts the registered redirect === the `config.js` value**, failing loud on any mismatch
+    *before* the login test. Same extraction covers the issuer (`http://127.0.0.1:8090`) — asserted
+    against Zitadel discovery. This makes drift between `config.js` and the seeded app a hard error, not
+    a silent login failure. (Redirect is therefore **not** written to `runtime-env` — the config.js
+    default is already correct and now verified; keeps Decision 3's file minimal.)
+14. **Seeded human user AND Native App must land in the SAME org.** Both are created against the
+    FirstInstance **default org** (the PAT's own org) — confirmed in the proof: project, app, and user
+    all shared `resourceOwner 380847100499395203`. `seed-zitadel.sh` creates the project/app and the
+    user with the *same* PAT (whose `Management` calls are scoped to the PAT's org by default), and adds
+    an explicit assert that the app's `resourceOwner` === the user's `resourceOwner`. Keeps the token
+    audience/flow consistent even though the app gates only on `email_verified` + `@dtl.local`.
+15. **Silent keyring is a TWO-STEP bootstrap (`--unlock` + `ensure-keyring.py`) — `--unlock` alone is
+    NOT sufficient. Never `--password-store=basic`.** First fix attempt used only `gnome-keyring-daemon
+    --unlock ""` in `lab/run-app.sh`; this stopped the "Unlock Keyring" dialog (`--start` on a *locked
+    existing* keyring) but on a genuinely fresh machine — no default collection created yet — the
+    *next* dialog appeared instead: "Choose password for NEW keyring." Root cause, confirmed empirically
+    via raw D-Bus probes on the VM (isolated from the app, no GUI needed to test):
+    - `--unlock` only calls `Unlock()` on an *existing* Secret Service collection; if `ReadAlias
+      ('default')` returns `/` (none exists), `--unlock` is a no-op — it does **not** create one.
+    - The app's first `safeStorage` write then triggers the *client's* normal `CreateCollection` D-Bus
+      call, which requires an interactive `Prompt` — served by `gcr-prompter`, a real GTK dialog when
+      `DISPLAY` is set (confirmed: with `DISPLAY` unset the same call still requires a Prompt, but
+      `gcr-prompter` fails to render and the prompt auto-*dismisses*, so headless testing without a
+      display cannot observe "success," only "cannot show it" — this is why the first fix's headless
+      proof missed the bug entirely).
+    - The escape hatch is a **legacy interface**, still exposed alongside the modern Secret Service API:
+      `org.gnome.keyring.InternalUnsupportedGuiltRiddenInterface.CreateWithMasterPassword(attributes,
+      master_secret)` creates a collection with a caller-supplied password — **no Prompt object
+      returned at all**. `lab/ensure-keyring.py` calls this once (idempotent: no-ops if a default
+      collection already exists), aliases it `'default'`, and unlocks it — all via raw D-Bus, no GUI.
+    - **Verified end-to-end**, not just "returns 0": a full round-trip probe (create/find collection →
+      unlock → `CreateItem` the actual secret store → `GetSecrets` read-back) succeeded with **zero
+      prompts**, repeated across independent daemon restarts, and with `~/.local/share/keyrings/`
+      **removed entirely** (the true fresh-machine case) — confirming it's not order-dependent luck.
+    `lab/run-app.sh` runs `--unlock` then `ensure-keyring.py` inside the **same** `dbus-run-session`
+    (sharing the bus/daemon state) before launching the app. `teardown.sh` still clears
+    `~/.local/share/keyrings/*.keyring` as part of the same auth-state reset that removes `tokens.enc`
+    — no longer load-bearing for prompt-freeness (ensure-keyring.py self-heals either way) but keeps a
+    fresh token paired with a fresh keyring. **No app code change** anywhere — purely launch-environment
+    tooling (`lab/ensure-keyring.py`, `python3-dbus` added to `setup.sh` preflight). We deliberately do
+    **NOT** use `--password-store=basic`: that bypasses the OS keyring and *downgrades* token encryption
+    (an app-feature downgrade); comments in `run-app.sh`/`ensure-keyring.py`/docs forbid "simplifying"
+    it into that. ⚠️ Clearing the keyring in `teardown.sh` is a fresh-machine/lab assumption (a real
+    desktop would lose saved passwords).
 
 ## Prerequisite list (preflight-checked by `setup.sh`, documented for mhoang)
 
@@ -132,19 +189,26 @@ auto-installs (no sudo assumed).
 7. **Zitadel init + PAT seed** — `podman run zitadel … start-from-init` with the FirstInstance
    **machine SA + PAT** env (Decision 1), `PATPATH` bind-mounted to `lab/zitadel/.seed/pat.txt`; poll
    `/.well-known/openid-configuration` until up (~60–90 s).
-8. **Seed resources via Management API** — `seed-zitadel.sh` reads the PAT, then curls:
-   Project `DTL App` → Native PKCE App `dtl-electron` (redirect `http://127.0.0.1:51234/callback`,
-   auth method NONE) → capture `client_id` → import `testuser@dtl.local` (email verified, password
-   `Test1234!`, no change required). All confirmed working in the proof.
-9. **Write `lab/.runtime-env`** — `export DTL_OIDC_CLIENT_ID=<fresh id>` + `export
-   DTL_KILL_CA_PATH=<abs lab/certs/ca.pem>` (Decisions 2, 3).
-10. **Summary** — print the three curl checks to run and the exact launch command (below); exit 0.
+8. **Extract config.js source-of-truth values** — `REDIRECT_URI` and `ISSUER` grep-extracted from
+   `src/main/config.js` (Decision 13). Assert `ISSUER` matches the Zitadel discovery `issuer` before
+   seeding (catches an issuer drift early).
+9. **Seed resources via Management API** — `seed-zitadel.sh <pat> <issuer> <redirect_uri>` reads the
+   PAT, then curls: Project `DTL App` → Native PKCE App `dtl-electron` (redirect = the extracted
+   `REDIRECT_URI`, auth method NONE) → **re-fetch app, assert registered redirect === REDIRECT_URI and
+   clientSecret empty** (Decision 13) → import `testuser@dtl.local` (email verified, password
+   `Test1234!`, no change required) → **assert app.resourceOwner === user.resourceOwner** (Decision 14)
+   → echo `client_id`. All confirmed working in the proof; fails loud (non-zero) on any mismatch.
+10. **Write `lab/.runtime-env`** — `export DTL_OIDC_CLIENT_ID=<fresh id>` + `export
+    DTL_KILL_CA_PATH=<abs lab/certs/ca.pem>` (Decisions 2, 3).
+11. **Summary** — print the three curl checks to run and the exact launch command (below); exit 0.
 
-## `seed-zitadel.sh` — the Management-API helper (called by step 8)
+## `seed-zitadel.sh` — the Management-API helper (called by step 9)
 
-Thin, single-purpose: takes the PAT file path + issuer base URL, performs the four confirmed calls,
-and echoes the `client_id` to stdout (captured by `setup.sh`). Fails loudly (non-zero) if any call
-returns a non-2xx or an empty `client_id` — never writes a partial `.runtime-env`.
+Thin, single-purpose: takes the PAT file path + issuer base URL + redirect URI, performs the calls,
+and echoes the `client_id` to stdout (captured by `setup.sh`). Fails loudly (non-zero) — never writes
+a partial `.runtime-env` — on any of: non-2xx API call, empty `client_id`, **registered redirect ≠ the
+passed redirect (Decision 13)**, non-empty client secret, or **app.resourceOwner ≠ user.resourceOwner
+(Decision 14)**.
 
 ## Runtime-env wiring (the packaged-binary path, end-to-end)
 
@@ -152,20 +216,39 @@ The launch wrapper (the existing NoMachine `dbus-run-session` + keyring one) gai
 `source lab/.runtime-env` before the exec — so the fresh client_id + absolute CA path land in the
 running `.deb`'s `process.env`:
 
+The wrapper is encapsulated in **`lab/run-app.sh`** (single source of truth — DRY; all docs point to
+it). Run it from the NoMachine DESKTOP terminal:
+
 ```bash
-cd ~/Downloads/dtl-app          # or the unpacked-.deb dir
-source lab/.runtime-env         # ← injects DTL_OIDC_CLIENT_ID + DTL_KILL_CA_PATH
-dbus-run-session -- bash -c '
-  eval $(gnome-keyring-daemon --start --components=secrets)
-  GNOME_DESKTOP_SESSION_ID=this-is-deprecated ELECTRON_DISABLE_SANDBOX=1 \
-    "<path>/dtl-app"            # packaged binary, or ./node_modules/.bin/electron . for dev
-'
+bash lab/run-app.sh             # sources lab/.runtime-env + silent keyring bootstrap, then launches
 ```
 
-`config.js` already reads both via `process.env` with the correct fallbacks — **no app code change**.
-Wrapper env precedence confirmed: `source` sets the vars in the shell that `dbus-run-session` inherits,
-so they reach the child process. (The `.deb`'s `.desktop` `Exec=` does not `source` anything — hence
-the wrapper, not the menu entry, is the sanctioned launch path for the lab; documented for mhoang.)
+Expanded, run-app.sh does:
+
+```bash
+source lab/.runtime-env         # ← injects DTL_OIDC_CLIENT_ID + DTL_KILL_CA_PATH
+dbus-run-session -- bash -c '
+  eval $(echo -n "" | gnome-keyring-daemon --unlock --components=secrets,pkcs11,ssh)  # unlock if exists
+  python3 lab/ensure-keyring.py                                                       # create if not
+  GNOME_DESKTOP_SESSION_ID=this-is-deprecated ELECTRON_DISABLE_SANDBOX=1 \
+    ${DTL_APP_BIN:-./node_modules/.bin/electron .}'
+```
+
+`config.js` already reads both env vars via `process.env` with the correct fallbacks — **no app code
+change**. Wrapper env precedence confirmed: `source` sets the vars in the shell that `dbus-run-session`
+inherits, so they reach the child process. (The `.deb`'s `.desktop` `Exec=` does not `source` anything —
+hence the wrapper, not the menu entry, is the sanctioned launch path for the lab; documented for mhoang.)
+
+**Keyring / silent unlock (plan Decision 15):** safeStorage encrypts `tokens.enc` with an OS-keyring
+key (`gnome_libsecret`). On a NoMachine session the login keyring is locked, so `gnome-keyring-daemon
+--start` pops an interactive "Unlock Keyring" GUI dialog — friction that breaks the one-command goal.
+`--unlock` with an **empty password** (fed on stdin) opens the keyring **silently**. This needs the
+default keyring to have an empty password, so `setup.sh`'s clean-slate (via `teardown.sh`) clears any
+pre-existing password-protected keyring (`~/.local/share/keyrings/*.keyring`) — the same auth-state
+reset that already removes `tokens.enc` (a fresh token needs a fresh, empty-password-unlockable
+keyring). We **never** use `--password-store=basic`: that bypasses the OS keyring and DOWNGRADES token
+encryption (an app-feature downgrade); we remove only the *prompt* (an environment property). ⚠️ Clearing
+the keyring is a fresh-machine/lab assumption — on a real desktop it discards all saved passwords.
 
 ## `teardown.sh` — step breakdown (returns VM to "never ran DTL App")
 
@@ -178,9 +261,16 @@ Removes **only** app/test-created state; every step is idempotent (`|| true`), n
 5. `rm -f lab/kill/kill-signing.key` (regenerated per box) + reset `lab/kill/kill-command.json`.
 6. `rm -f lab/.runtime-env` + `rm -rf lab/zitadel/.seed/` (PAT output).
 7. `rm -f "~/.config/DTL App/tokens.enc"` + `rm -f "~/.config/DTL App/kill-ledger.json"` (wipe app state).
+7b. `rm -f ~/.local/share/keyrings/*.keyring` + the `default` pointer (Decision 15 — so `run-app.sh`'s
+   `--unlock ""` recreates a fresh empty-password keyring; part of the same auth-state reset as #7).
+   Runs in BOTH modes (full + `--for-setup`) so `setup.sh` alone guarantees a prompt-free launch.
 8. Remove the unpacked `.deb` dir (e.g. `rm -rf ~/dtl-app-installed`) — leaves the source repo intact.
 9. Print what was removed + a reminder that prerequisites (node/podman/libnss3-tools/…) were left in
    place by design.
+
+> Container/volume removal is done **one name at a time**, not `podman rm -f A B C` — on the VM's
+> podman a multi-name `rm -f` with any nonexistent name returns 0 but silently removes nothing
+> (found + fixed during verification).
 
 ## VM verification plan (the acceptance bar — Decision 10)
 
@@ -190,18 +280,29 @@ Removes **only** app/test-created state; every step is idempotent (`|| true`), n
 - `:8444` no cert → `verify=NONE`.
 
 **Zitadel seeding (before app):**
-- `/.well-known/openid-configuration` `issuer` = `http://127.0.0.1:8090`.
+- `/.well-known/openid-configuration` `issuer` = `http://127.0.0.1:8090` (and === config.js issuer).
 - `lab/.runtime-env` exists and contains a non-empty `DTL_OIDC_CLIENT_ID`.
 - `GET /management/v1/users/{testuser}` (with PAT) → `USER_STATE_ACTIVE`, email verified.
+- **Redirect match (Decision 13):** seeded app's registered redirect === `config.js` `redirectUri`
+  (`http://127.0.0.1:51234/callback`); client secret empty. `seed-zitadel.sh` aborts setup if not.
+- **Same-org (Decision 14):** seeded app's `resourceOwner` === seeded user's `resourceOwner`.
+
+> **⚠️ One-way door (Decision 12):** the first `teardown.sh`/`setup.sh` here destroys the existing
+> manually-seeded 8090 Zitadel. That's intended — but it means the VM verification below is the moment
+> the manual instance is retired. Only run it when the scripts are complete.
 
 **Full end-to-end (the success criterion):**
-1. `teardown.sh` → confirm clean state (no lab containers, no NSS entries, no `.runtime-env`).
-2. `setup.sh` → completes green, prints the launch command.
-3. Launch via the wrapper (sources `.runtime-env`) → **`testuser@dtl.local` / `Test1234!` logs in
-   end-to-end with ZERO Web Console interaction** → branded home launcher renders → tool-1 green,
-   tool-2 red 403, nav-block amber (the M1b flows, proving the seeded app is fully wired).
-4. **Repeatability:** `teardown.sh` → `setup.sh` again → login succeeds a second time (proves each run
-   self-cleans and re-seeds; the fresh client_id round-trips through `.runtime-env` both times).
+1. `teardown.sh` → confirm clean state (no lab containers, no NSS entries, no `.runtime-env`, keyring cleared).
+2. `setup.sh` → completes green, prints the `bash lab/run-app.sh` launch line.
+3. `bash lab/run-app.sh` (NoMachine desktop) → **NO keyring dialog of any kind** (neither "Unlock
+   Keyring" nor "Choose password for NEW keyring") → `testuser@dtl.local` / `Test1234!` logs in
+   end-to-end with **ZERO Web Console interaction** → branded home launcher renders → tool-1 green,
+   tool-2 red 403, nav-block amber (M1b flows).
+4. **Token persists / warm restart (Decision 15):** quit + `bash lab/run-app.sh` again → **no keyring
+   dialog AND no OIDC re-login** (warm start from `tokens.enc`, decrypted via the silently-unlocked
+   keyring — proves the empty-password keyring both persists and stays prompt-free).
+5. **Repeatability:** `teardown.sh` → `setup.sh` → `run-app.sh` again → login succeeds a second time,
+   still prompt-free (fresh client_id + fresh empty-password keyring each cycle).
 
 **Regression (unchanged app behaviour):** M0 cert presented to `:8443`; M2 gate still forces login;
 M3 kill still wipes+locks; M4 `[session]` line still logs. No app file changed, so these are
@@ -211,14 +312,19 @@ confirmatory, not at-risk.
 
 **New (this spike):**
 - `lab/setup.sh` — the one-command bring-up (orchestrates cert/NSS/nginx/Zitadel/seed/runtime-env).
-- `lab/teardown.sh` — the app-trace remover.
+- `lab/teardown.sh` — the app-trace remover (containers/NSS/certs/keyring/runtime-env/app-state).
 - `lab/zitadel/seed-zitadel.sh` — Management-API resource seeder (Project + Native App + user).
+- `lab/run-app.sh` — DRY launch helper (runtime-env + two-step silent keyring bootstrap; Decision 15).
+- `lab/ensure-keyring.py` — idempotent D-Bus helper: creates the default Secret Service collection
+  with an empty password via the legacy `CreateWithMasterPassword` method if none exists — no prompt.
 
 **Modified (this spike):**
-- The launch wrapper doc/snippet in `lab/zitadel/README.md` (add the `source lab/.runtime-env` line;
-  replace manual Steps 3–5 with "run `setup.sh`").
+- `lab/zitadel/README.md` — automated-path banner + `run-app.sh` launch; manual Steps 3–5 superseded;
+  `--unlock ""` + `ensure-keyring.py` everywhere; corrected the old `--password-store=basic` note.
+- `lab/README.md` — run-order → `setup.sh` / `run-app.sh` / `teardown.sh`.
+- `lab/setup.sh` — preflight adds `gnome-keyring-daemon` + `python3-dbus`; summary points at `run-app.sh`.
+- `docs/m4-two-layer-compose.md`, `plans/M2-oidc.md` — inline wrappers updated to the two-step form.
 - `.gitignore` — add `lab/.runtime-env` and `lab/zitadel/.seed/` (Decision 11).
-- `lab/README.md` — point the run-order at `setup.sh` / `teardown.sh`.
 
 **Untouched (hard guardrail — no app code):** `src/main/**` (all of it — `cert-select.js`, `wipe.js`,
 `window.js`, `navigation.js`, `chrome-state.js`, `auth/**`, `kill/**`, `config.js`), `src/preload/**`,

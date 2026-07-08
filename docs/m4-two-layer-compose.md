@@ -11,10 +11,15 @@ cp lab/kill/kill-none.json lab/kill/kill-command.json && chmod 644 lab/kill/kill
 podman ps | grep dtl-mtls-nginx   # confirm up
 ```
 
-App launch wrapper (required for safeStorage on the VM):
+App launch wrapper (required for safeStorage on the VM). Prefer `bash lab/run-app.sh`; expanded form
+below. Uses `--unlock` (empty password) **plus** `ensure-keyring.py` — **not** `--start` — so **no
+dialog of any kind** appears (neither "Unlock Keyring" nor "Choose password for NEW keyring" — the
+latter needs the second step since `--unlock` alone only unlocks an *existing* collection). Do NOT
+switch to `--password-store=basic` (that downgrades token encryption off the OS keyring):
 ```bash
 dbus-run-session -- bash -c '
-  eval $(gnome-keyring-daemon --start --components=secrets)
+  eval $(echo -n "" | gnome-keyring-daemon --unlock --components=secrets,pkcs11,ssh)
+  python3 lab/ensure-keyring.py
   GNOME_DESKTOP_SESSION_ID=this-is-deprecated ELECTRON_DISABLE_SANDBOX=1 \
     ./node_modules/.bin/electron .
 '
