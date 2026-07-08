@@ -1,10 +1,18 @@
-const PROTECTED_URL = 'https://localhost:8443'
-
 export const PRODUCT_NAME = 'DTL App'
-export const MTLS_ALLOWLIST = ['localhost:8443']
-export const NAV_ALLOWLIST = (process.env.DTL_NAV_ALLOWLIST || 'localhost:8443').split(',')
+export const MTLS_ALLOWLIST = ['localhost:8443', 'localhost:8445']
+export const NAV_ALLOWLIST = (process.env.DTL_NAV_ALLOWLIST || 'localhost:8443,localhost:8445').split(',')
 export const CERT_SUBJECT_CN = process.env.DTL_CERT_CN || 'DTL-Ubuntu-Test-Device'
-export const HOME_URL = process.env.DTL_TARGET_URL || PROTECTED_URL
+
+// M1b — tile → target URL map for the home launcher. tool-1/tool-2 are live (mTLS fixtures);
+// tool-3…6 are inert placeholders (null = "Coming soon", no navigation).
+export const TOOLS = {
+  'tool-1': process.env.DTL_TARGET_URL || 'https://localhost:8443',
+  'tool-2': 'https://localhost:8445',
+  'tool-3': null,
+  'tool-4': null,
+  'tool-5': null,
+  'tool-6': null,
+}
 
 // Kill switch — M3. All values are env-overridable (DTL_KILL_*).
 // publicKeyPem: the Ed25519 public key the app trusts exactly one signing key from.
