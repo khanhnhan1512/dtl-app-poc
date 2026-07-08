@@ -1,11 +1,15 @@
 import { NAV_ALLOWLIST } from './config.js'
 import { isAllowed } from './allowlist.js'
 
-export function applyNavigationLockdown(webContents) {
+// onBlocked(url): optional, fired after preventDefault() on a blocked will-navigate/will-redirect
+// (M1b — drives the local address-not-permitted page). Not wired to setWindowOpenHandler; the
+// nav-block demo is a same-window link, never a window.open.
+export function applyNavigationLockdown(webContents, { onBlocked } = {}) {
   webContents.on('will-navigate', (e, url) => {
     if (!isAllowed(url, NAV_ALLOWLIST)) {
       e.preventDefault()
       console.log(`[nav] BLOCKED will-navigate → ${url}`)
+      onBlocked?.(url)
     }
   })
 
@@ -13,6 +17,7 @@ export function applyNavigationLockdown(webContents) {
     if (!isAllowed(url, NAV_ALLOWLIST)) {
       e.preventDefault()
       console.log(`[nav] BLOCKED will-redirect → ${url}`)
+      onBlocked?.(url)
     }
   })
 

@@ -1,0 +1,16 @@
+:root{
+  --surface-2:#ffffff; --surface-1:#f6f5f1;
+  --border:#e5e3da; --border-strong:#d0cec4;
+  --text-primary:#1c1c1a; --text-secondary:#5f5e59; --text-muted:#8b8a82;
+  --bg-accent:#e6f1fb;  --text-accent:#185fa5;
+  --bg-success:#e7f4ea; --text-success:#1b7f4b;
+  --bg-danger:#fcebeb;  --text-danger:#a32d2d;
+  --bg-warning:#faeeda; --text-warning:#8a5209;
+  --radius:8px;
+  --font-sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-mono:ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{font-family:var(--font-sans);color:var(--text-primary);margin:0;background:var(--surface-1)}
+a{text-decoration:none;color:inherit}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:3px 9px;border-radius:999px;width:fit-content}

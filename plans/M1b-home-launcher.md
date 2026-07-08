@@ -317,6 +317,13 @@ curl -s --cacert ca.pem https://localhost:8444/                                 
 - [ ] M0/M2/M3/M4 regression checks all pass.
 - [ ] `lint --check` and `make test` still pass.
 
+## Confirmations from review (2026-07-08 — plan approved with these folded in)
+
+1. **`:8443` body-swap regression, checked.** `grep -rn "verify=\$ssl_client_verify\|verify=SUCCESS\|verify=NONE"` across `src/`, `docs/`, `plans/`, `lab/`, `Makefile` — every hit is a **human-readable** instruction in a plan/README telling a person to eyeball `verify=SUCCESS` in curl output; `make test` is the no-op stub (confirmed earlier this session), nothing automated parses the `:8443` body. Still, to keep the documented curl checks meaningful: the new Appendix C page embeds an HTML comment `<!-- verify=$ssl_client_verify subject=$ssl_client_s_dn -->` at the top of the response (nginx substitutes the real values), so `curl ... | grep verify=` still works for anyone following `lab/README.md`. `lab/README.md`'s `:8443` curl comment is updated to say "grep the HTML comment for `verify=SUCCESS`" instead of implying a plain-text body.
+2. **`did-fail-load` boundary — confirmed, not built.** The access-denied page is driven by `did-navigate`'s HTTP code (tool-2 = 403, an HTTP-layer response after a successful TLS handshake). A TLS-layer handshake failure (e.g. no cert / cert rejected at the TLS layer, not the app layer) fires `did-fail-load` instead and falls through to Electron's default error page — none of the three demo cases in this plan hit that path by design (tool-1/tool-2 both complete the TLS handshake; the nav-block never reaches TLS at all). This is a known, explicitly accepted boundary, not something this plan's pages cover.
+3. **`showBack:true` on the red (`tool-blocked`) state.** `buildState()`'s `tool-ok` and `tool-blocked` branches share the same `showBack:true` (both are "inside a tool," differing only in badge colour) — so the access-denied page always has a way back to home. Called out explicitly since Decision 7 above focuses on the badge/title and could otherwise be read as silent on `showBack`.
+4. **Device CN sourced from `CERT_SUBJECT_CN`, never hardcoded.** `chrome-state.js` imports `CERT_SUBJECT_CN` from `config.js` (the same constant M4's `logSessionIdentity()` call uses) and includes it in every pushed state; the static pages never hardcode `DTL-Ubuntu-Test-Device` — the identity indicator is rendered client-side from the pushed state object, so the two can't drift.
+
 ## Next steps (after approval)
 
 Implement Steps 1 → 5 in order, verifying each on the VM before the next, per working discipline.

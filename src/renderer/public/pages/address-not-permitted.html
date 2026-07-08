@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="description" content="DTL App — address not permitted">
+    <meta name="keywords" content="DTL, enterprise, browser, kiosk">
+    <title>Address not permitted — DTL App</title>
+    <link rel="stylesheet" href="./tokens.css">
+  </head>
+  <body>
+    <div style="padding:3rem 1.5rem;
+                display:flex;
+                flex-direction:column;
+                align-items:center;
+                text-align:center">
+      <div style="width:56px;
+                  height:56px;
+                  border-radius:50%;
+                  background:var(--bg-warning);
+                  color:var(--text-warning);
+                  display:flex;
+                  align-items:center;
+                  justify-content:center;
+                  margin-bottom:1rem">
+        <svg viewBox="0 0 24 24"
+             width="28"
+             height="28"
+             fill="none"
+             stroke="currentColor"
+             stroke-width="2"
+             stroke-linecap="round"
+             stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M5.5 5.5l13 13" />
+        </svg>
+      </div>
+      <div style="font-size:18px;font-weight:500;margin-bottom:6px">Address not permitted</div>
+      <div style="font-size:14px;
+                  color:var(--text-secondary);
+                  line-height:1.6;
+                  max-width:440px;
+                  margin-bottom:1.25rem">
+        DTL App only opens approved internal addresses. This link points outside the allow-list, so it was never opened — no request left the device.
+      </div>
+      <div style="display:flex;
+                  align-items:center;
+                  gap:8px;
+                  background:var(--surface-1);
+                  border:0.5px solid var(--border);
+                  border-radius:var(--radius);
+                  padding:8px 12px;
+                  font-size:12px;
+                  color:var(--text-secondary);
+                  font-family:var(--font-mono);
+                  margin-bottom:1.25rem">
+        <svg viewBox="0 0 24 24"
+             width="15"
+             height="15"
+             fill="none"
+             stroke="currentColor"
+             stroke-width="2"
+             stroke-linecap="round"
+             stroke-linejoin="round">
+          <path d="M9 15l6-6M8 8l-1 1a3.5 3.5 0 0 0 5 5l1-1M16 16l1-1a3.5 3.5 0 0 0-5-5l-1 1M3 3l18 18" />
+        </svg>
+        <span id="blocked-line">blocked: —</span>
+      </div>
+      <div style="font-size:13px;
+                  color:var(--text-muted);
+                  max-width:440px;
+                  line-height:1.6">
+        Your device is still verified — this is an address restriction, not a connection problem.
+      </div>
+    </div>
+    <script>
+  var u = new URLSearchParams(location.search).get('url') || '?'
+  document.getElementById('blocked-line').textContent = 'blocked: ' + u
+    </script>
+  </body>
+</html>

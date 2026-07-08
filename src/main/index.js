@@ -2,12 +2,11 @@ import { app, Menu } from 'electron'
 import { handleCertSelect } from './cert-select.js'
 import { wipe } from './wipe.js'
 import { createShell } from './window.js'
-import { PRODUCT_NAME, OIDC, HOME_URL, CERT_SUBJECT_CN } from './config.js'
+import { PRODUCT_NAME, OIDC } from './config.js'
 import { getOidcClient } from './auth/oidc.js'
 import { runLoginFlow } from './auth/login-flow.js'
 import { logBackend, save, getValidAccessToken, load as loadTokens } from './auth/token-store.js'
 import { startKillPoller } from './kill/poller.js'
-import { logSessionIdentity } from './session-identity.js'
 
 app.setName(PRODUCT_NAME)
 
@@ -118,23 +117,9 @@ app.whenReady().then(async () => {
     return
   }
 
-  // M4 Step 1: surface device+user session identity on portal navigate (D-M4-8).
-  // did-navigate provides URL + httpResponseCode for main-frame navigations. Gate
-  // logSessionIdentity() on 2xx (real mTLS success); emit a transport-blocked line
-  // on non-2xx (e.g. HTTP 400 no-cert) so the log never implies a bogus device identity.
-  // Register BEFORE createShell() so the listener is in place when the portalView is created.
-  app.on('web-contents-created', (_e, wc) => {
-    wc.on('did-navigate', (_nav, url, httpResponseCode) => {
-      if (!url.startsWith(HOME_URL)) return
-      if (httpResponseCode >= 200 && httpResponseCode < 300) {
-        logSessionIdentity({ deviceCN: CERT_SUBJECT_CN, userEmail: sessionEmail ?? 'unknown' })
-      } else {
-        console.log(`[session] transport blocked — no valid mTLS (HTTP ${httpResponseCode})`)
-      }
-    })
-  })
-
-  createShell()
+  // M4 Step 1's did-navigate identity hook now lives in window.js (M1b — generalized from the
+  // single old HOME_URL to any TOOLS host, and extended to drive the chrome bar state).
+  createShell({ userEmail: sessionEmail })
 
   // M3 Step 5: start periodic kill-command poller (immediate check + interval).
   startKillPoller()
