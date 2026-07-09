@@ -248,7 +248,11 @@ lab/zitadel/.seed/
 # Runtime env written by lab/setup.sh — per-machine fresh client_id + abs CA path. NEVER commit.
 lab/.runtime-env
 
-# Kill-switch lab — private signing key NEVER committed (public key + samples are committed)
+# Kill-switch lab — signing keypair is generated FRESH per machine by lab/setup.sh (the public
+# half is env-injected via DTL_KILL_PUBLIC_KEY_PEM, not a fixed shipped fixture — see plan
+# Decision 16). Neither half is committed. The committed lab/kill/kill-*.json samples were signed
+# against the original fixed dev key and are reference-only; they won't verify against a fresh one.
 lab/kill/*.key
+lab/kill/kill-signing.pub
 
 electron.vite.config.*.mjs

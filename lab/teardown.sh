@@ -67,8 +67,15 @@ certutil -D -n "$CA_NICK"   -d "$NSS_DB" >/dev/null 2>&1 || true
 log "removing generated certs/keys (lab/certs)..."
 rm -f "$REPO_ROOT"/lab/certs/{ca,server,client}.{key,crt,pem,p12,srl,csr}
 
-log "removing kill signing key + resetting active kill-command to no-op..."
-rm -f "$REPO_ROOT/lab/kill/kill-signing.key"
+log "removing kill signing keypair + resetting active kill-command..."
+# Both halves removed: the public key is now a per-machine artifact regenerated fresh by
+# setup.sh (Decision 16) and env-injected via DTL_KILL_PUBLIC_KEY_PEM, not a fixed shipped
+# fixture — leaving a stale kill-signing.pub around after a full teardown would silently
+# mismatch whatever key setup.sh generates next.
+rm -f "$REPO_ROOT/lab/kill/kill-signing.key" "$REPO_ROOT/lab/kill/kill-signing.pub"
+# Best-effort placeholder only — this committed fixture is signed with the ORIGINAL fixed dev
+# key and won't verify against a freshly generated one anyway; setup.sh overwrites this file
+# with a freshly-signed no-op in its own Step 5 regardless.
 if [[ -f "$REPO_ROOT/lab/kill/kill-none.json" ]]; then
   cp "$REPO_ROOT/lab/kill/kill-none.json" "$REPO_ROOT/lab/kill/kill-command.json" 2>/dev/null || true
 fi

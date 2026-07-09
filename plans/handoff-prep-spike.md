@@ -155,6 +155,27 @@ doesn't exist), no Terraform, no console. This is the mechanism the plan commits
     (an app-feature downgrade); comments in `run-app.sh`/`ensure-keyring.py`/docs forbid "simplifying"
     it into that. ⚠️ Clearing the keyring in `teardown.sh` is a fresh-machine/lab assumption (a real
     desktop would lose saved passwords).
+16. **Kill-switch signing key is regenerated FRESH per machine and env-injected — zero app code
+    change (clean-room dry-run gap).** A clean-room pass found `sign-command.sh` failing with
+    "kill-signing.key not found": `teardown.sh` deletes the private key as an app-trace but
+    `setup.sh` never regenerated it. Investigated rather than guessed which model applies —
+    `config.js`'s `KILL.publicKeyPem` already reads `process.env.DTL_KILL_PUBLIC_KEY_PEM` with the
+    hardcoded PEM only as a *fallback*, the exact same override pattern already used for
+    `DTL_OIDC_CLIENT_ID`. So the fix is Model B (fresh keypair, env-injected public key), and it
+    needs **no `config.js` change** — the override already existed, it was just never wired up.
+    `setup.sh`'s Step 5 now: resets any existing keypair (`gen-keypair.sh` refuses to run over an
+    existing one — idempotent regardless of whether `teardown.sh` ran first), regenerates a fresh
+    one, signs a **fresh** no-op `kill-command.json` with it (the committed `kill-none.json` was
+    signed with the *original* fixed dev key and would fail signature verification against a new
+    one), and writes the fresh public key into `lab/.runtime-env` as `DTL_KILL_PUBLIC_KEY_PEM`.
+    **Side effect, explicitly accepted:** `lab/kill/kill-signing.pub` was a *committed* fixture
+    matching the original hardcoded `config.js` constant and the committed sample fixtures
+    (`kill-wipe-cmd005.json`, `kill-stale.json`, `kill-wrong-device.json`, etc.). Under the
+    fresh-per-machine model those samples become permanently reference-only (their signatures never
+    verify against a newly generated key on any machine that has run `setup.sh`) — untracked
+    `kill-signing.pub` from git (`git rm --cached`, file kept on disk) and added it to `.gitignore`
+    alongside the private key, since it's no longer a stable shipped constant. `teardown.sh` now
+    removes both halves of the keypair together.
 
 ## Prerequisite list (preflight-checked by `setup.sh`, documented for mhoang)
 
