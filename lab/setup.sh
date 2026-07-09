@@ -187,6 +187,7 @@ cat <<EOF
 [setup] Launch the app (NoMachine DESKTOP terminal — one command, no keyring dialog of any kind):
 [setup]   bash lab/run-app.sh
 [setup]   # sources lab/.runtime-env + bootstraps/unlocks the keyring silently (empty pw) — zero prompts.
-[setup]   # packaged .deb: set DTL_APP_BIN to the unpacked binary path, then run lab/run-app.sh
+[setup]   # packaged .deb: set DTL_APP_BIN (see lab/run-app.sh header for exact quoting — the
+[setup]   #                path has a space, "DTL App"), then run lab/run-app.sh
 [setup] ============================================================
 EOF

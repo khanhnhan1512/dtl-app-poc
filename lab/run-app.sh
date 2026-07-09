@@ -39,7 +39,11 @@ else
 fi
 
 # Launch target: dev binary by default; override with DTL_APP_BIN for a packaged .deb, e.g.
-#   DTL_APP_BIN='"$HOME/dtl-app-installed/opt/DTL App/dtl-app"' bash lab/run-app.sh
+#   DTL_APP_BIN="\"$HOME/dtl-app-installed/opt/DTL App/dtl-app\"" bash lab/run-app.sh
+# Note the escaped inner \" quotes AND the outer double quotes (not single) — $APP_BIN is spliced
+# unquoted into a bash -c string below, so a path containing a space (like "DTL App") needs its
+# OWN literal quote characters embedded in the value to survive that re-parse. Single-quoting the
+# whole assignment would also stop $HOME from expanding — confirmed both failure modes empirically.
 APP_BIN="${DTL_APP_BIN:-./node_modules/.bin/electron .}"
 ENSURE_KEYRING="$REPO_ROOT/lab/ensure-keyring.py"
 
