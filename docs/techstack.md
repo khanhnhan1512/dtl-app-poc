@@ -1,8 +1,7 @@
 # Tech Stack — DTL App PoC
 
 > Single source of truth for technology choices and their rationale.
-> Referenced by `CLAUDE.md` and `docs/brainstorm.md` (which no longer duplicate this).
-> Validated via research on 2026-06-24. This is a decision / reference record — detailed
+> Referenced by `CLAUDE.md`. Validated via research on 2026-06-24. This is a decision / reference record — detailed
 > architecture and implementation belong to the **Plan phase (not yet started, gated)**.
 
 ## Bottom line

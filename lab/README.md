@@ -14,9 +14,9 @@ bash lab/teardown.sh   # remove all app/test traces (keeps prerequisites: node/p
 `testuser@dtl.local`) with **zero web-console clicks**, writing the fresh `client_id` into
 `lab/.runtime-env` (git-ignored). `run-app.sh` then sources that env and unlocks the OS keyring
 **silently** (empty password — no "Unlock Keyring" dialog; it keeps real `gnome_libsecret`
-encryption, it does NOT downgrade to `--password-store=basic`). Full design + empirical proof:
-`plans/handoff-prep-spike.md`. **⚠️ First `setup.sh` run is a one-way door** — it destroys any
-existing manually-seeded Zitadel (and clears the OS login keyring) and re-seeds from scratch.
+encryption, it does NOT downgrade to `--password-store=basic`). **⚠️ First `setup.sh` run is a
+one-way door** — it destroys any existing manually-seeded Zitadel (and clears the OS login
+keyring) and re-seeds from scratch.
 
 The manual step-by-step below is kept as reference / fallback for machines where `setup.sh` can't run.
 

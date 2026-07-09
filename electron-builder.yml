@@ -22,7 +22,6 @@ files:
   - "node_modules/yallist/**"
   - "!lab/**"
   - "!src/**"
-  - "!plans/**"
   - "!docs/**"
   - "!contracts/**"
   - "!**/*.key"

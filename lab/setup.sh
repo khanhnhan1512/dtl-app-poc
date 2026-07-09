@@ -7,7 +7,7 @@
 #            write lab/.runtime-env (fresh client_id + absolute DTL_KILL_CA_PATH).
 #
 # ZERO Web Console interaction. Real Zitadel (Authorization Code + PKCE) — only the SETUP is
-# automated, never the auth. See plans/handoff-prep-spike.md for the full design + empirical proof.
+# automated, never the auth.
 #
 # ⚠️ ONE-WAY DOOR (plan Decision 12): the clean-slate step DESTROYS any existing manually-seeded
 #    Zitadel on :8090 and re-seeds from scratch. Intended (reproducible-from-scratch) but

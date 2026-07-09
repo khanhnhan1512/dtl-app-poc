@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # seed-zitadel.sh — auto-seed the Zitadel resources the DTL app needs, headless (no console).
 #
-# Mechanism (confirmed empirically on v2.71.10 — see plans/handoff-prep-spike.md):
+# Mechanism (confirmed empirically on v2.71.10):
 #   Zitadel FirstInstance seeds a machine (service-account) user + PAT to a file on first
 #   start-from-init. THIS script uses that PAT against the Management REST API to create:
 #     1. Project        "DTL App"

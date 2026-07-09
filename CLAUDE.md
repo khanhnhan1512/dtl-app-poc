@@ -1,14 +1,13 @@
 # DTL App PoC — CLAUDE.md
 
 ## Project overview
-This is a proof-of-concept (PoC) for a custom managed/enterprise browser controlled by DTL. It is built as a locked-down native desktop application wrapping a WebView to securely access internal corporate portals. The Brainstorming phase is complete and the **Planning phase is now authorized**: plans are written to `plans/`. **Implementation stays gated** — code for a milestone is written only after that milestone's plan has been reviewed and approved (see Rules).
+This is a proof-of-concept (PoC) for a custom managed/enterprise browser controlled by DTL. It is built as a locked-down native desktop application wrapping a WebView to securely access internal corporate portals. The Brainstorming phase is complete and the **Planning phase is now authorized**: plans are written to `docs/internal/`. **Implementation stays gated** — code for a milestone is written only after that milestone's plan has been reviewed and approved (see Rules).
 
 ## Scope (locked)
 - **5 Core Features ONLY:** Custom branding, custom homepage, custom OIDC auth, device-bound mTLS, and an app-level remote wipe.
 - **Platforms:** Desktop-first (Ubuntu primary, Windows secondary). macOS, iOS, and Android are strictly tabled.
 - **Out of Scope:** Data Loss Prevention (DLP - no download/copy blocking), true MDM remote uninstall, real PKI infrastructure, and production backend.
 - **Note:** The KIOSK shell + domain allow-list (see Tech stack) are *how the locked-down shell is built*, not a separate sixth feature — they are in scope per brainstorm decisions C3/C4.
-- *Refer to `docs/brainstorm.md` for full rationale.*
 
 ## Tech stack & key decisions
 Headline only — **full detail, comparison, gotchas, and rationale live in `docs/techstack.md`** (the single source of truth, validated 2026-06-24).
@@ -20,7 +19,7 @@ Headline only — **full detail, comparison, gotchas, and rationale live in `doc
 - *Comparison, mechanisms, phase-plan libraries, and mobile forward-look → `docs/techstack.md`.*
 
 ## Repo layout
-- `plans/` — the roadmap and per-milestone detailed plans (Planning-phase output; each reviewed before its implementation).
+- `docs/internal/` — the roadmap and per-milestone detailed plans (Planning-phase output; each reviewed before its implementation). Untracked (git-ignored) by design — present on disk for the two-tier gate, kept out of the handoff repo state.
 - *(Source layout to be populated as code is generated, per approved plans.)*
 
 ## Commands
@@ -40,7 +39,7 @@ Headline only — **full detail, comparison, gotchas, and rationale live in `doc
 - *(Code style conventions to be defined in the Plan phase)*
 
 ## Rules (always / never)
-- **Two-tier gate (planning vs implementation):** Writing plans is now authorized — Claude Code MAY create the roadmap and per-milestone plans under `plans/`. But **NEVER write implementation code or scaffolding for a milestone until that milestone's plan has been reviewed and explicitly approved.** Approval is per-milestone, not blanket. After writing a plan, stop and wait for review.
+- **Two-tier gate (planning vs implementation):** Writing plans is now authorized — Claude Code MAY create the roadmap and per-milestone plans under `docs/internal/`. But **NEVER write implementation code or scaffolding for a milestone until that milestone's plan has been reviewed and explicitly approved.** Approval is per-milestone, not blanket. After writing a plan, stop and wait for review.
 - **NEVER** expand the scope beyond the 5 core features without explicit authorization. Do not add DLP features.
 - **NEVER** over-engineer. This is a PoC to learn mechanics, not a production-hardened app.
 - **NEVER** embed web content via the `<webview>` tag or `BrowserView` (deprecated/unstable). Use `WebContentsView`.
@@ -75,6 +74,5 @@ scp -i ~/.ssh/gimme -P 22 \
 
 ## Reference docs
 - `docs/techstack.md`: Single source of truth for the technology stack (decisions, gotchas, libraries, mobile look-ahead).
-- `docs/brainstorm.md`: The source of truth for all brainstorming decisions.
 - `docs/task_description.md`: The original task description for this PoC.
 - `images/*.svg`: Architecture & app-anatomy diagrams for quick onboarding.

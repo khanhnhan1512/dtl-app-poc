@@ -18,8 +18,7 @@ Loopback callback port the Electron app will use: **`51234`**
 **The manual BRING UP + MANUAL web-console steps below are now superseded by `lab/setup.sh`**, which
 stands up the *entire* lab (certs, NSS, nginx, Postgres, Zitadel) **and auto-seeds** the Project +
 Native PKCE App + `testuser@dtl.local` with **zero web-console clicks**. It writes the fresh
-`client_id` into `lab/.runtime-env` (per-machine, git-ignored). Mechanism + empirical proof:
-`plans/handoff-prep-spike.md`.
+`client_id` into `lab/.runtime-env` (per-machine, git-ignored).
 
 ```bash
 cd ~/Downloads/dtl-app

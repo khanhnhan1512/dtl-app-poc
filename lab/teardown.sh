@@ -3,7 +3,7 @@
 # "never ran DTL App" state. Idempotent: safe to run on an already-clean box.
 #
 # NEVER removes prerequisites (node, podman, libnss3-tools, openssl, keyring) — those outlive
-# teardown by design and are preflight-checked by setup.sh. See plans/handoff-prep-spike.md.
+# teardown by design and are preflight-checked by setup.sh.
 #
 # Modes:
 #   teardown.sh              full teardown (default) — everything below.
