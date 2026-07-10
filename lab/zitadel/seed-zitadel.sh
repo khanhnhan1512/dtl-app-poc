@@ -21,6 +21,24 @@ die()  { echo "[seed] ERROR: $*" >&2; exit 1; }
 PAT="$(tr -d '[:space:]' < "$PAT_FILE")"
 [[ -n "$PAT" ]] || die "PAT file is empty: $PAT_FILE"
 
+# Discovery being up does not mean the Management/Auth API is: Zitadel's REST gateway can still
+# answer 503/connection-refused for a few seconds after discovery responds, because the gRPC
+# backend behind it warms up a beat later. Poll the actual call we need (the whoami below) until
+# it succeeds, instead of trusting discovery as a proxy for this API's readiness.
+wait_for_api_ready() {
+  local max_wait=45 interval=3 waited=0 code
+  log "waiting for the Management API to accept the PAT (up to ${max_wait}s)..."
+  while (( waited < max_wait )); do
+    code="$(curl -s -o /dev/null -w '%{http_code}' -X GET "$BASE/auth/v1/users/me" \
+              -H "Authorization: Bearer $PAT" || true)"
+    [[ "$code" == "200" ]] && { log "Management API ready (after ${waited}s)."; return 0; }
+    sleep "$interval"
+    waited=$(( waited + interval ))
+  done
+  die "Management API never became ready after ${max_wait}s (last HTTP code: ${code:-none}). Zitadel may still be warming up - just re-run lab/setup.sh, it clean-slates and retries from scratch."
+}
+wait_for_api_ready
+
 # api <METHOD> <path> [json-body]  -> echoes response body; dies on non-2xx.
 api() {
   local method="$1" path="$2" body="${3:-}"
