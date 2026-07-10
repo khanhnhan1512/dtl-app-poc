@@ -88,9 +88,9 @@ KILL_PUB_PEM="$(cat "$REPO_ROOT/lab/kill/kill-signing.pub")"
 [[ -n "$KILL_PUB_PEM" ]] || die "kill-signing.pub was not generated"
 log "keypair generated."
 
-# The committed sample fixtures (lab/kill/kill-none.json, kill-wipe.json, etc.) were signed with
-# the ORIGINAL fixed dev-box key and will NOT verify against this fresh one - sign a fresh no-op
-# directly with the current key instead of copying a stale pre-signed file.
+# Any local kill-none.json/kill-wipe.json samples (git-ignored, signed on demand - see
+# lab/kill/README.md) may be stale against an older key - sign a fresh no-op directly with the
+# current key instead of copying a possibly-stale pre-signed file.
 log "signing a fresh no-op kill-command..."
 bash "$REPO_ROOT/lab/kill/sign-command.sh" "$DEVICE_CN" cmd-noop none > "$REPO_ROOT/lab/kill/kill-command.json"
 chmod 644 "$REPO_ROOT/lab/kill/kill-command.json"

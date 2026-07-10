@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Standalone Ed25519 kill-command verifier - M3 Step 1 hand-verification gate.
+// Standalone Ed25519 kill-command verifier - hand-verification gate.
 // NO Electron, NO runtime deps - only Node built-in crypto.
 //
 // Usage:
