@@ -13,7 +13,7 @@ openssl genrsa -out ca.key 4096
 openssl req -x509 -new -key ca.key -sha256 -days 3650 \
   -subj "/CN=DTL-Test-Root-CA" -out ca.pem
 
-echo "=== [2/5] Server cert (SAN required by modern Chromium — CN alone is ignored) ==="
+echo "=== [2/5] Server cert (SAN required by modern Chromium - CN alone is ignored) ==="
 openssl genrsa -out server.key 2048
 openssl req -new -key server.key -subj "/CN=localhost" -out server.csr
 # x509 -req does NOT copy CSR extensions; re-state via -extfile

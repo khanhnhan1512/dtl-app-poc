@@ -35,20 +35,20 @@ async function ensureAuthenticated() {
 
   const accessToken = await getValidAccessToken(client)
   if (accessToken) {
-    console.log('[auth] Valid stored token — no login required (warm start)')
+    console.log('[auth] Valid stored token - no login required (warm start)')
     // Read email from the persisted token payload (stored at cold login by save(tokenSet, email)).
     const email = loadTokens()?.email ?? null
     return { ok: true, email }
   }
 
-  console.log('[auth] No valid token — starting OIDC flow')
+  console.log('[auth] No valid token - starting OIDC flow')
   try {
     const { tokenSet, email, allowed } = await runLoginFlow()
     if (!allowed) {
-      console.error('[auth] REJECTED — email domain mismatch:', email)
+      console.error('[auth] REJECTED - email domain mismatch:', email)
       return { ok: false, email: null }
     }
-    console.log('[auth] PASS —', email)
+    console.log('[auth] PASS -', email)
     save(tokenSet, email)   // persist email alongside tokens for warm-start reads
     return { ok: true, email }
   } catch (err) {
@@ -88,7 +88,7 @@ app.whenReady().then(async () => {
       console.log(`[login] allowed domain : @${OIDC.allowedEmailDomain}`)
 
       if (allowed) {
-        console.log('[login] PASS — email domain check passed')
+        console.log('[login] PASS - email domain check passed')
         save(tokenSet)
         const storedToken = await getValidAccessToken(client)
         if (storedToken) {
@@ -98,7 +98,7 @@ app.whenReady().then(async () => {
           process.exitCode = 1
         }
       } else {
-        console.log('[login] REJECTED — email not verified or domain mismatch')
+        console.log('[login] REJECTED - email not verified or domain mismatch')
         process.exitCode = 1
       }
     } catch (err) {
@@ -112,7 +112,7 @@ app.whenReady().then(async () => {
   // Normal launch: gate portal on authentication.
   const { ok: authenticated, email: sessionEmail } = await ensureAuthenticated()
   if (!authenticated) {
-    console.error('[auth] Authentication failed — portal will not load')
+    console.error('[auth] Authentication failed - portal will not load')
     app.quit()
     return
   }

@@ -24,7 +24,7 @@ if (!docPath) {
 }
 
 function reject(reason) {
-  console.log(`INVALID — ${reason}`)
+  console.log(`INVALID - ${reason}`)
   process.exit(1)
 }
 
@@ -42,7 +42,7 @@ let doc
 try {
   doc = JSON.parse(readFileSync(resolve(docPath), 'utf8'))
 } catch (e) {
-  reject(`parse error — ${e.message}`)
+  reject(`parse error - ${e.message}`)
 }
 
 // Step 1: required fields
@@ -92,5 +92,5 @@ console.log(`action      : ${action}`)
 console.log(`issued_at   : ${issued_at} (${new Date(issued_at).toISOString()})`)
 console.log(`canonical   : ${canonical}`)
 console.log()
-console.log('VALID — Ed25519 signature verified against lab/kill/kill-signing.pub')
+console.log('VALID - Ed25519 signature verified against lab/kill/kill-signing.pub')
 process.exit(0)

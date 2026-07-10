@@ -39,7 +39,7 @@ export function startLoopbackServer(expectedState) {
         res.end(`<html><body><h2>Login error: ${error}</h2><p>${desc}</p></body></html>`)
         server.close()
         clearTimeout(timer)
-        reject(new Error(`OAuth error: ${error} — ${desc}`))
+        reject(new Error(`OAuth error: ${error} - ${desc}`))
         return
       }
 
@@ -64,7 +64,7 @@ export function startLoopbackServer(expectedState) {
 
     const timer = setTimeout(() => {
       server.close()
-      reject(new Error('Loopback timeout — no callback received within 5 minutes'))
+      reject(new Error('Loopback timeout - no callback received within 5 minutes'))
     }, 5 * 60 * 1000)
 
     server.on('error', (err) => {

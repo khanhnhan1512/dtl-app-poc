@@ -17,12 +17,12 @@ export async function runLoginFlow() {
 
   const callbackPromise = startLoopbackServer(state)
 
-  console.log('[auth] Opening system browser for login (RFC 8252 — NOT an embedded view)')
+  console.log('[auth] Opening system browser for login (RFC 8252 - NOT an embedded view)')
   await shell.openExternal(authUrl)
   console.log('[auth] Waiting for loopback callback on', OIDC.redirectUri, '...')
 
   const { code } = await callbackPromise
-  console.log('[auth] Callback received — exchanging code')
+  console.log('[auth] Callback received - exchanging code')
 
   const { tokenSet, claims, userinfoClaims } = await exchangeCode(client, code, state, codeVerifier, nonce)
   const { email, emailVerified, allowed } = checkEmailDomain(claims, userinfoClaims)

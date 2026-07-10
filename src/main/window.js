@@ -78,7 +78,7 @@ export function createShell({ userEmail }) {
         logSessionIdentity({ deviceCN: CERT_SUBJECT_CN, userEmail: userEmail ?? 'unknown' })
         pushChromeState(buildState('tool-ok', { label, userEmail }))
       } else {
-        console.log(`[session] transport blocked — no valid mTLS (HTTP ${httpResponseCode})`)
+        console.log(`[session] transport blocked - no valid mTLS (HTTP ${httpResponseCode})`)
         loadPage(portalView, 'access-denied', { code: httpResponseCode })
         pushChromeState(buildState('tool-blocked', { label, userEmail }))
       }

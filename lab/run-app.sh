@@ -34,7 +34,7 @@ if [[ -f lab/.runtime-env ]]; then
   # shellcheck disable=SC1091
   source lab/.runtime-env
 else
-  echo "[run-app] lab/.runtime-env not found — run 'bash lab/setup.sh' first." >&2
+  echo "[run-app] lab/.runtime-env not found - run 'bash lab/setup.sh' first." >&2
   exit 1
 fi
 

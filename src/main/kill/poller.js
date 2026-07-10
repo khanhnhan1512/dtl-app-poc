@@ -52,20 +52,20 @@ function fetchKillCommand() {
  * All reject paths and VALID_NONE: log only, no side effects.
  */
 export async function checkKillOnce() {
-  console.log('[kill] checkKillOnce — fetching', KILL.url)
+  console.log('[kill] checkKillOnce - fetching', KILL.url)
   let body
   try {
     body = await fetchKillCommand()
   } catch (err) {
     // Fail-open; unreachable control plane is never destructive.
-    console.log('[kill] control plane unreachable — ignoring (fail-open):', err.message)
+    console.log('[kill] control plane unreachable - ignoring (fail-open):', err.message)
     return
   }
 
   let doc
   try { doc = JSON.parse(body) }
   catch {
-    console.warn('[kill] response is not valid JSON — ignoring')
+    console.warn('[kill] response is not valid JSON - ignoring')
     return
   }
 
@@ -77,7 +77,7 @@ export async function checkKillOnce() {
       // Idempotency: record BEFORE the destructive call so a crash/race after wipe()
       // but before quit() cannot re-execute the same command_id after recovery.
       ledger.record(doc.command_id)
-      console.log('[kill] VALID_WIPE — executing wipe (session + cert + tokens)')
+      console.log('[kill] VALID_WIPE - executing wipe (session + cert + tokens)')
       try {
         const result = await wipe()
         console.log('[kill] wipe() result:', result)
@@ -86,33 +86,33 @@ export async function checkKillOnce() {
       }
       // Quit after wipe; locked-out state surfaces on next relaunch via the auth gate
       // (no token -> forced re-login) and mTLS (no cert -> nginx 400).
-      console.log('[kill] kill complete — quitting app')
+      console.log('[kill] kill complete - quitting app')
       app.quit()
       return
     }
     case Verdict.VALID_NONE:
-      console.log('[kill] no command (action:none) — app continues normally')
+      console.log('[kill] no command (action:none) - app continues normally')
       break
     case Verdict.BAD_SIGNATURE:
-      console.warn('[kill] REJECTED — bad signature (tampered or wrong key)')
+      console.warn('[kill] REJECTED - bad signature (tampered or wrong key)')
       break
     case Verdict.NOT_THIS_DEVICE:
-      console.warn('[kill] REJECTED — not this device (device_id mismatch)')
+      console.warn('[kill] REJECTED - not this device (device_id mismatch)')
       break
     case Verdict.STALE:
-      console.warn('[kill] REJECTED — stale (issued_at outside window)')
+      console.warn('[kill] REJECTED - stale (issued_at outside window)')
       break
     case Verdict.ALREADY_EXECUTED:
-      console.warn('[kill] REJECTED — already executed (command_id in ledger)')
+      console.warn('[kill] REJECTED - already executed (command_id in ledger)')
       break
     case Verdict.UNKNOWN_ACTION:
-      console.warn('[kill] REJECTED — unknown action:', doc?.action)
+      console.warn('[kill] REJECTED - unknown action:', doc?.action)
       break
     case Verdict.MALFORMED:
-      console.warn('[kill] REJECTED — malformed document')
+      console.warn('[kill] REJECTED - malformed document')
       break
     default:
-      console.warn('[kill] REJECTED — unhandled verdict:', verdict)
+      console.warn('[kill] REJECTED - unhandled verdict:', verdict)
   }
 }
 
@@ -127,7 +127,7 @@ export function startKillPoller() {
 
   async function tick() {
     if (running) {
-      console.log('[kill] poller tick skipped — previous check still in flight')
+      console.log('[kill] poller tick skipped - previous check still in flight')
       return
     }
     running = true
@@ -138,5 +138,5 @@ export function startKillPoller() {
   // Immediate launch check (no await - returns to caller; interval fires later).
   tick()
   setInterval(tick, KILL.pollIntervalMs)
-  console.log('[kill] poller started — interval', KILL.pollIntervalMs, 'ms')
+  console.log('[kill] poller started - interval', KILL.pollIntervalMs, 'ms')
 }

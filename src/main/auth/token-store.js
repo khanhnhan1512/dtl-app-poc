@@ -14,8 +14,8 @@ function tokensPath() {
 export function logBackend() {
   const available = safeStorage.isEncryptionAvailable()
   const backend   = safeStorage.getSelectedStorageBackend()
-  console.log('[token-store] logBackend() — storage backend      :', backend)
-  console.log('[token-store] logBackend() — encryption available :', available)
+  console.log('[token-store] logBackend() - storage backend      :', backend)
+  console.log('[token-store] logBackend() - encryption available :', available)
 }
 
 /**
@@ -36,8 +36,8 @@ export function save(tokenSet, email) {
   // inside app.whenReady(), after OIDC completes.
   const available = safeStorage.isEncryptionAvailable()
   const backend   = safeStorage.getSelectedStorageBackend()
-  console.log('[token-store] save() — backend            :', backend)
-  console.log('[token-store] save() — isEncryptionAvailable :', available)
+  console.log('[token-store] save() - backend            :', backend)
+  console.log('[token-store] save() - isEncryptionAvailable :', available)
 
   const expiresAt = tokenSet.expires_at
     ? tokenSet.expires_at * 1000                            // openid-client: seconds -> ms
@@ -61,10 +61,10 @@ export function save(tokenSet, email) {
   let encrypted
   try {
     encrypted = safeStorage.encryptString(payload)
-    console.log('[token-store] save() — encryptString() SUCCEEDED,', encrypted.length, 'bytes')
+    console.log('[token-store] save() - encryptString() SUCCEEDED,', encrypted.length, 'bytes')
   } catch (err) {
-    console.error('[token-store] save() — encryptString() THREW:', err.message)
-    console.error('[token-store] save() — failed with backend=' + backend +
+    console.error('[token-store] save() - encryptString() THREW:', err.message)
+    console.error('[token-store] save() - failed with backend=' + backend +
                   ' | isEncryptionAvailable=' + available)
     throw err
   }
@@ -80,7 +80,7 @@ export function load() {
   const path = tokensPath()
   if (!existsSync(path)) return null
   if (!safeStorage.isEncryptionAvailable()) {
-    console.warn('[token-store] load() — safeStorage unavailable; clearing tokens.enc')
+    console.warn('[token-store] load() - safeStorage unavailable; clearing tokens.enc')
     clearTokens()
     return null
   }
@@ -89,7 +89,7 @@ export function load() {
     const json = safeStorage.decryptString(buf)
     return JSON.parse(json)
   } catch (err) {
-    console.warn('[token-store] load() — failed:', err.message)
+    console.warn('[token-store] load() - failed:', err.message)
     clearTokens()
     return null
   }
@@ -122,20 +122,20 @@ export async function getValidAccessToken(client) {
   }
 
   if (tokens.refresh) {
-    console.log('[token-store] getValidAccessToken: access token expired — refreshing')
+    console.log('[token-store] getValidAccessToken: access token expired - refreshing')
     try {
       const newTokenSet = await oidcRefresh(client, tokens.refresh)
       save(newTokenSet) // rotated refresh token - MUST overwrite
       console.log('[token-store] getValidAccessToken: refresh succeeded')
       return newTokenSet.access_token
     } catch (err) {
-      console.warn('[token-store] getValidAccessToken: refresh failed —', err.message)
+      console.warn('[token-store] getValidAccessToken: refresh failed -', err.message)
       clearTokens()
       return null
     }
   }
 
-  console.log('[token-store] getValidAccessToken: token expired, no refresh token — clearing')
+  console.log('[token-store] getValidAccessToken: token expired, no refresh token - clearing')
   clearTokens()
   return null
 }

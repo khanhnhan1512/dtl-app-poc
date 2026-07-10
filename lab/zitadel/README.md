@@ -307,10 +307,10 @@ dialog when no collection exists yet - both confirmed empirically and both elimi
 
 Expected output:
 ```
-[token-store] logBackend() — storage backend      : gnome_libsecret
-[token-store] logBackend() — encryption available : true
-[login] PASS — email domain check passed
-[token-store] save() — encryptString() SUCCEEDED, NNN bytes
+[token-store] logBackend() - storage backend      : gnome_libsecret
+[token-store] logBackend() - encryption available : true
+[login] PASS - email domain check passed
+[token-store] save() - encryptString() SUCCEEDED, NNN bytes
 [token-store] tokens.enc written to /home/khanhnhan/.config/DTL App/tokens.enc
 [login] getValidAccessToken: returned valid token from store
 ```
