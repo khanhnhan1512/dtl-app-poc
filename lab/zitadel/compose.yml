@@ -1,9 +1,9 @@
 version: '3.8'
-# lab/zitadel/compose.yml — Minimal local Zitadel IdP for M2 OIDC PoC.
-# Per-machine — NOT committed to git. See README.md for run order + manual steps.
+# lab/zitadel/compose.yml - Minimal local Zitadel IdP for M2 OIDC PoC.
+# Per-machine - NOT committed to git. See README.md for run order + manual steps.
 #
 # Pinned issuer: http://127.0.0.1:8090  (ExternalSecure=false, no TLS)
-# Throwaway local creds documented in README.md — NOT real secrets.
+# Throwaway local creds documented in README.md - NOT real secrets.
 #
 # Rootless podman note: named volumes are used (not bind mounts) to avoid
 # subuid/subgid permission issues. If `podman compose` is unavailable, install
@@ -25,8 +25,8 @@ services:
       start_period: 30s
 
   zitadel:
-    # v2.71.10: last v2.x line — login/console UI is integrated in the single container.
-    # Do NOT use :latest — v4+ moved the login UI to a separate "Login V2" app and
+    # v2.71.10: last v2.x line - login/console UI is integrated in the single container.
+    # Do NOT use :latest - v4+ moved the login UI to a separate "Login V2" app and
     # /ui/console returns 404 in a single-container setup.
     image: ghcr.io/zitadel/zitadel:v2.71.10
     # start-from-init: initialise DB schema on first boot, then serve.
@@ -53,7 +53,7 @@ services:
       ZITADEL_EXTERNALDOMAIN: "127.0.0.1"
       ZITADEL_EXTERNALPORT: "8090"
       ZITADEL_EXTERNALSECURE: "false"
-      # --- Master key: exactly 32 ASCII chars — throwaway local value ---
+      # --- Master key: exactly 32 ASCII chars - throwaway local value ---
       ZITADEL_MASTERKEY: "MasterkeyNeedsToHave32Characters"
       # --- First-boot admin user (only applied on the very first start-from-init) ---
       ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: "admin"

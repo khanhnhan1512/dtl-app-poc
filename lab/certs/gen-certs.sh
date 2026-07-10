@@ -2,7 +2,7 @@
 # Generates the DTL mTLS test certificate chain.
 # Output: ca.key, ca.pem, server.key, server.crt, client.key, client.crt, client.p12
 # All files are git-ignored (lab/certs/*.key *.crt *.pem *.p12 *.srl *.csr).
-# Re-run at any time to regenerate — existing files are overwritten.
+# Re-run at any time to regenerate - existing files are overwritten.
 set -euo pipefail
 cd "$(dirname "$0")"
 

@@ -1,4 +1,4 @@
-// Chrome bar state — the small state object Main pushes to chromeView (M1b).
+// Chrome bar state - the small state object Main pushes to chromeView.
 // Kept separate from window.js (one concern per file, matching navigation.js/allowlist.js).
 import { TOOLS, CERT_SUBJECT_CN } from './config.js'
 import { extractHost } from './allowlist.js'
@@ -21,9 +21,9 @@ export function toolLabelForUrl(url) {
   return TOOL_HOSTS[extractHost(url)] ?? null
 }
 
-// kind: 'home' | 'tool-ok' | 'tool-blocked'. Any other kind returns null — callers must not
+// kind: 'home' | 'tool-ok' | 'tool-blocked'. Any other kind returns null - callers must not
 // push a state for a URL that matched no branch (e.g. the local address-not-permitted page),
-// which is what leaves the previously pushed state (green) standing, per plan Decision 4.
+// which is what leaves the previously pushed state (green) standing.
 export function buildState(kind, { label, userEmail } = {}) {
   const identity = { deviceCN: CERT_SUBJECT_CN, userEmail }
   switch (kind) {

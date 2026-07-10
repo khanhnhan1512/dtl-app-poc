@@ -3,11 +3,11 @@ import { URL } from 'url'
 
 // Port MUST match the redirect_uri registered in Zitadel.
 const LOOPBACK_PORT = 51234
-const LOOPBACK_HOST = '127.0.0.1' // explicit IPv4 — 'localhost' may resolve to ::1
+const LOOPBACK_HOST = '127.0.0.1' // explicit IPv4 - 'localhost' may resolve to ::1
 
 const SUCCESS_HTML =
   '<html><body style="font-family:sans-serif;padding:2em">' +
-  '<h2>Login complete — you can close this tab.</h2>' +
+  '<h2>Login complete - you can close this tab.</h2>' +
   '</body></html>'
 
 /**

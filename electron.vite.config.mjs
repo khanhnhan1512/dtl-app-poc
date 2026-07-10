@@ -9,7 +9,7 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()]
   },
   preload: {
-    // M1b — two preloads: index.js (portal, empty) + chrome.js (chrome bar, narrow IPC API).
+    // M1b - two preloads: index.js (portal, empty) + chrome.js (chrome bar, narrow IPC API).
     plugins: [externalizeDepsPlugin()],
     build: {
       rollupOptions: {

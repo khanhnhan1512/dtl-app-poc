@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Sign a kill command per contracts/kill-command.md.
+# Sign a kill command: canonical bytes are the compact, alphabetically-keyed JSON of
+# {action, command_id, device_id, issued_at}, signed with Ed25519 (64-byte sig, base64-encoded).
 #
 # Usage:
 #   ./sign-command.sh <device_id> <command_id> <action> [issued_at_ms]
@@ -28,7 +29,7 @@ if [[ ! -f "$PRIV" ]]; then
   echo "kill-signing.key not found. Run gen-keypair.sh first." >&2; exit 1
 fi
 
-# Produce the signed JSON document via Node (canonical bytes per the contract).
+# Produce the signed JSON document via Node.
 node - "$DEVICE_ID" "$COMMAND_ID" "$ACTION" "$ISSUED_AT" "$PRIV" <<'NODESCRIPT'
 const { sign } = require('crypto')
 const { readFileSync } = require('fs')
@@ -37,14 +38,14 @@ const [,, device_id, command_id, action, issued_at_arg, keyPath] = process.argv
 
 const issued_at = issued_at_arg ? parseInt(issued_at_arg, 10) : Date.now()
 
-// §2 canonical bytes: compact JSON, keys in ascending alphabetical order.
+// Canonical bytes: compact JSON, keys in ascending alphabetical order.
 // Key order: action < command_id < device_id < issued_at  (already alphabetical).
 const canonical = JSON.stringify({ action, command_id, device_id, issued_at })
 const canonicalBytes = Buffer.from(canonical, 'utf8')
 
 const privateKeyPem = readFileSync(keyPath, 'utf8')
 
-// Ed25519: algorithm=null (no pre-hash — EdDSA uses its own internal digest).
+// Ed25519: algorithm=null (no pre-hash - EdDSA uses its own internal digest).
 const sigBytes = sign(null, canonicalBytes, privateKeyPem)
 const signature = sigBytes.toString('base64')
 

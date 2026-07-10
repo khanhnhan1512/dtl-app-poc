@@ -1,8 +1,7 @@
-# DTL Kill-Switch Lab — Ed25519 signing infra (M3 Step 1)
+# DTL Kill-Switch Lab - Ed25519 signing infra (M3 Step 1)
 
 Per-machine lab infra. **Not committed (private key).** Same discipline as `lab/certs/` and
 `lab/zitadel/`. The private key plays the role of DTL's control-plane signing key.
-Wire format pinned in `contracts/kill-command.md`.
 
 ---
 
@@ -11,8 +10,8 @@ Wire format pinned in `contracts/kill-command.md`.
 | File                  | Committed? | Purpose                                              |
 |-----------------------|-----------|------------------------------------------------------|
 | `gen-keypair.sh`      | Yes        | Generate a fresh Ed25519 keypair on this machine     |
-| `sign-command.sh`     | Yes        | Sign a kill command per the contract                 |
-| `verify-check.js`     | Yes        | Standalone Node verifier — M3 Step 1 gate check      |
+| `sign-command.sh`     | Yes        | Sign a kill command                                  |
+| `verify-check.js`     | Yes        | Standalone Node verifier - M3 Step 1 gate check      |
 | `kill-signing.key`    | **NO**     | Ed25519 private signing key (git-ignored)            |
 | `kill-signing.pub`    | Yes        | Ed25519 public key (hardcoded in the app later)      |
 | `kill-wipe.json`      | Yes        | Signed sample: `action:"wipe"`                       |
@@ -22,12 +21,12 @@ Wire format pinned in `contracts/kill-command.md`.
 
 ## Device identity
 
-`device_id` = **`DTL-Ubuntu-Test-Device`** — matches the mTLS client-cert Subject CN from M0.
+`device_id` = **`DTL-Ubuntu-Test-Device`** - matches the mTLS client-cert Subject CN from M0.
 Consistent across the PoC: the same identity string appears in the TLS handshake and the kill target.
 
 ---
 
-## BRING UP (if keypair is missing — e.g. fresh clone)
+## BRING UP (if keypair is missing - e.g. fresh clone)
 
 ```bash
 cd lab/kill
@@ -41,7 +40,7 @@ After regenerating the keypair, update `KILL.publicKeyPem` in `src/main/config.j
 
 ---
 
-## VERIFY — M3 Step 1 hand-verification gate (no Electron needed)
+## VERIFY - M3 Step 1 hand-verification gate (no Electron needed)
 
 ```bash
 cd ~/Downloads/dtl-app
@@ -50,22 +49,22 @@ cd ~/Downloads/dtl-app
 node lab/kill/verify-check.js lab/kill/kill-wipe.json
 node lab/kill/verify-check.js lab/kill/kill-none.json
 
-# Tamper test — should print INVALID:
+# Tamper test - should print INVALID:
 node -e "
   const d = JSON.parse(require('fs').readFileSync('lab/kill/kill-wipe.json','utf8'))
   d.action = 'none'   // flip the action
   require('fs').writeFileSync('/tmp/tampered.json', JSON.stringify(d,null,2))
 "
-node lab/kill/verify-check.js /tmp/tampered.json   # → INVALID — bad signature
+node lab/kill/verify-check.js /tmp/tampered.json   # -> INVALID - bad signature
 ```
 
-All three pass → Step 1 is verified. Proceed to Step 2 (serve via nginx `:8444`).
+All three pass -> Step 1 is verified. Proceed to Step 2 (serve via nginx `:8444`).
 
 ---
 
-## Step 2 — Serve via nginx (M3 Step 2 gate)
+## Step 2 - Serve via nginx (M3 Step 2 gate)
 
-The kill endpoint is `https://localhost:8444/kill` (TLS, no client cert required — D-M3-9).
+The kill endpoint is `https://localhost:8444/kill` (TLS, no client cert required - D-M3-9).
 `kill-command.json` is the **active** file nginx serves; swap it to toggle none ↔ wipe.
 
 > **Permission gotcha:** nginx runs as a different uid inside the container; JSON files must be
@@ -98,20 +97,20 @@ cd ~/Downloads/dtl-app
 # 1. Returns signed JSON (action:"none"):
 curl -s --cacert lab/certs/ca.pem https://localhost:8444/kill
 
-# 2. Byte-identical to source (no reformatting — signature must not break):
+# 2. Byte-identical to source (no reformatting - signature must not break):
 curl -s --cacert lab/certs/ca.pem https://localhost:8444/kill | diff - lab/kill/kill-command.json
-# → no output (identical)
+# -> no output (identical)
 
 # 3. Swap to wipe and confirm:
 cp lab/kill/kill-wipe.json lab/kill/kill-command.json
 curl -s --cacert lab/certs/ca.pem https://localhost:8444/kill | python3 -m json.tool
-# → action: "wipe"
+# -> action: "wipe"
 
 # 4. Reset to none after demo:
 cp lab/kill/kill-none.json lab/kill/kill-command.json
 ```
 
-All pass → Step 2 verified. Proceed to Step 3 (in-app verifier, no wipe yet).
+All pass -> Step 2 verified. Proceed to Step 3 (in-app verifier, no wipe yet).
 
 ## SIGN A NEW COMMAND
 

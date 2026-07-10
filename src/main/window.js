@@ -14,9 +14,9 @@ import {
 const isDev = process.env.NODE_ENV === 'development'
 const CHROME_H = 48
 
-// M1b — local pages served into portalView. In dev, Vite's dev server serves `public/pages/*`
+// Local pages served into portalView. In dev, Vite's dev server serves `public/pages/*`
 // at the same root as the renderer; in prod they're copied verbatim into `out/renderer/pages/`
-// (Vite's publicDir mechanism — no build step for these static files).
+// (Vite's publicDir mechanism - no build step for these static files).
 function loadPage(view, name, query) {
   if (isDev) {
     const qs = query ? `?${new URLSearchParams(query).toString()}` : ''
@@ -41,7 +41,7 @@ export function createShell({ userEmail }) {
     devTools: isDev
   }
   // Two distinct preloads: chromeView gets the narrow dtlChrome IPC API; portalView keeps the
-  // existing empty preload — it renders both trusted local pages and (allow-listed) remote mTLS
+  // existing empty preload - it renders both trusted local pages and (allow-listed) remote mTLS
   // content, and must never get a privileged API.
   const chromeWebPrefs = { ...baseWebPrefs, preload: join(__dirname, '../preload/chrome.js') }
   const portalWebPrefs = { ...baseWebPrefs, preload: join(__dirname, '../preload/index.js') }
@@ -53,7 +53,7 @@ export function createShell({ userEmail }) {
   win.contentView.addChildView(portalView)
 
   // Tracks the last state pushed to chromeView so it can be re-sent if the bar's renderer script
-  // finishes registering its onState listener AFTER the first push (initial-state race) — see the
+  // finishes registering its onState listener AFTER the first push (initial-state race) - see the
   // 'chrome:ready' handler below.
   let currentChromeState = null
   function pushChromeState(state) {
@@ -66,11 +66,11 @@ export function createShell({ userEmail }) {
     onBlocked: (url) => loadPage(portalView, 'address-not-permitted', { url })
   })
 
-  // M1b — extends the M4 did-navigate hook (moved here from index.js, generalized from a single
-  // HOME_URL to any TOOLS host): 2xx on a tool host → log identity + green chrome state; non-2xx
-  // → local access-denied page + red chrome state; the home page itself → neutral chrome state.
-  // Anything else (the address-not-permitted page, the access-denied page's own load) matches no
-  // branch below and pushes no state — the last pushed state stands (plan Decision 4).
+  // This did-navigate hook covers any TOOLS host (generalized from a single fixed home URL):
+  // 2xx on a tool host -> log identity + green chrome state; non-2xx -> local access-denied
+  // page + red chrome state; the home page itself -> neutral chrome state. Anything else (the
+  // address-not-permitted page, the access-denied page's own load) matches no branch below and
+  // pushes no state - the last pushed state intentionally stands.
   portalView.webContents.on('did-navigate', (_nav, url, httpResponseCode) => {
     const label = toolLabelForUrl(url)
     if (label) {

@@ -230,7 +230,7 @@ dist/
 out/
 *.local
 
-# Lab generated secrets — NEVER commit private keys or certs
+# Lab generated secrets - NEVER commit private keys or certs
 lab/certs/*.key
 lab/certs/*.crt
 lab/certs/*.pem
@@ -238,21 +238,32 @@ lab/certs/*.p12
 lab/certs/*.srl
 lab/certs/*.csr
 
-# Zitadel lab — generated state and any future per-machine secrets
+# Zitadel lab - generated state and any future per-machine secrets
 lab/zitadel/data/
 lab/zitadel/.env
 lab/zitadel/secrets/
-# Auto-seed output (Zitadel PAT written by setup.sh's FirstInstance) — NEVER commit
+# Auto-seed output (Zitadel PAT written by setup.sh's FirstInstance) - NEVER commit
 lab/zitadel/.seed/
 
-# Runtime env written by lab/setup.sh — per-machine fresh client_id + abs CA path. NEVER commit.
+# Runtime env written by lab/setup.sh - per-machine fresh client_id + abs CA path. NEVER commit.
 lab/.runtime-env
 
-# Kill-switch lab — signing keypair is generated FRESH per machine by lab/setup.sh (the public
-# half is env-injected via DTL_KILL_PUBLIC_KEY_PEM, not a fixed shipped fixture — see plan
-# Decision 16). Neither half is committed. The committed lab/kill/kill-*.json samples were signed
-# against the original fixed dev key and are reference-only; they won't verify against a fresh one.
+# Kill-switch lab - signing keypair is generated FRESH per machine by lab/setup.sh (the public
+# half is env-injected via DTL_KILL_PUBLIC_KEY_PEM, not a fixed shipped fixture). Neither half is
+# committed. The committed lab/kill/kill-*.json samples were signed against the original fixed dev
+# key and are reference-only; they won't verify against a fresh one.
 lab/kill/*.key
 lab/kill/kill-signing.pub
+
+# Kill-command active file - overwritten by lab/setup.sh (fresh signed no-op) and reset by
+# lab/teardown.sh on every run. Generated, not shipped.
+lab/kill/kill-command.json
+
+# Internal design docs - milestone plans + process/reasoning docs, moved out of plans/ and docs/
+# for the handoff repo. Stay ON DISK (untracked) so Claude Code's two-tier plan-gate keeps
+# working - new plans are written here going forward (see CLAUDE.md). History of everything
+# moved here is preserved via `git log -- plans/<file>` / `git log -- docs/<file>` even after
+# `git rm --cached`.
+docs/internal/
 
 electron.vite.config.*.mjs

@@ -16,7 +16,7 @@ export function handleCertSelect(event, _webContents, url, certificateList, call
 
   const cert = certificateList.find((c) => c.subjectName === CERT_SUBJECT_CN)
   if (cert) {
-    console.log(`[cert-select] ALLOWED — ${host} → presenting ${CERT_SUBJECT_CN}`)
+    console.log(`[cert-select] ALLOWED — ${host} -> presenting ${CERT_SUBJECT_CN}`)
     callback(cert)
   } else {
     console.warn(`[cert-select] ALLOWED host ${host} but no cert matching ${CERT_SUBJECT_CN} found`)

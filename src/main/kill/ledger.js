@@ -1,6 +1,6 @@
-// Executed command_id ledger — M3.
+// Executed command_id ledger.
 // Persists executed command_ids to a plain JSON array in userData/kill-ledger.json.
-// NOT secret — purely an idempotency record. Survives restarts so a re-served
+// NOT secret - purely an idempotency record. Survives restarts so a re-served
 // command_id is never re-executed on the same device after recovery.
 import { app } from 'electron'
 import { readFileSync, writeFileSync, existsSync } from 'fs'

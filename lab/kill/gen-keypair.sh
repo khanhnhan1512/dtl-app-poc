@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Generate a fresh Ed25519 signing keypair for the M3 kill-switch lab.
-# Private key → lab/kill/kill-signing.key  (git-ignored — NEVER commit)
-# Public key  → lab/kill/kill-signing.pub  (committed — shipped in the app)
+# Generate a fresh Ed25519 signing keypair for the kill-switch lab.
+# Private key -> lab/kill/kill-signing.key  (git-ignored - NEVER commit)
+# Public key  -> lab/kill/kill-signing.pub  (committed - shipped in the app)
 #
 # Run once per dev box. If you regenerate the key, you MUST re-sign all kill commands
 # AND update the hardcoded publicKeyPem in src/main/config.js.

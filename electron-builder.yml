@@ -5,12 +5,12 @@ copyright: Copyright © 2025 DyTech Lab
 directories:
   output: dist
 
-# Explicit include-list — ONLY the vite-compiled output + the runtime dep tree.
+# Explicit include-list - ONLY the vite-compiled output + the runtime dep tree.
 # openid-client (in dependencies) is externalised by electron-vite's externalizeDepsPlugin,
 # so its transitive deps must be listed here. Complete tree at this lockfile:
-#   openid-client 5.7.1 → jose, lru-cache, object-hash, oidc-token-hash
-#   lru-cache → yallist
-# Belt-and-suspenders excludes follow — redundant given the include-list, but explicit about intent.
+#   openid-client 5.7.1 -> jose, lru-cache, object-hash, oidc-token-hash
+#   lru-cache -> yallist
+# Belt-and-suspenders excludes follow - redundant given the include-list, but explicit about intent.
 files:
   - "out/**"
   - "package.json"

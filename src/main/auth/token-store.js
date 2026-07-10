@@ -10,7 +10,7 @@ function tokensPath() {
   return join(app.getPath('userData'), TOKENS_FILENAME)
 }
 
-// Diagnostic: log backend state. Does NOT gate anything — purely informational.
+// Diagnostic: log backend state. Does NOT gate anything - purely informational.
 export function logBackend() {
   const available = safeStorage.isEncryptionAvailable()
   const backend   = safeStorage.getSelectedStorageBackend()
@@ -21,26 +21,26 @@ export function logBackend() {
 /**
  * Persist tokens encrypted by safeStorage to userData/tokens.enc.
  *
- * DIAGNOSTIC version: does NOT pre-check isEncryptionAvailable() before calling
- * encryptString(). Logs both values independently to determine whether they
- * are consistent. This disambiguates the "is it a timing issue?" question.
+ * Does not pre-check isEncryptionAvailable() before calling encryptString() - the call's own
+ * success or failure is the source of truth. Both values are logged alongside it so the
+ * active backend is visible if encryption ever fails.
  *
- * If encryptString() throws → re-throw so the caller can report FAILED with full detail.
+ * If encryptString() throws -> re-throw so the caller can report FAILED with full detail.
  *
  * @param {object} tokenSet - The token set from openid-client.
  * @param {string} [email]  - User email from userinfo. Optional: if omitted (e.g. on
  *   token refresh, which returns no userinfo), the previously stored email is preserved.
  */
 export function save(tokenSet, email) {
-  // Sample both values at save() time — which is well inside app.whenReady(), after OIDC
-  // completes. This is the LATEST possible point we could call these.
+  // safeStorage requires the app to be ready before it can be queried; save() runs safely
+  // inside app.whenReady(), after OIDC completes.
   const available = safeStorage.isEncryptionAvailable()
   const backend   = safeStorage.getSelectedStorageBackend()
   console.log('[token-store] save() — backend            :', backend)
   console.log('[token-store] save() — isEncryptionAvailable :', available)
 
   const expiresAt = tokenSet.expires_at
-    ? tokenSet.expires_at * 1000                            // openid-client: seconds → ms
+    ? tokenSet.expires_at * 1000                            // openid-client: seconds -> ms
     : Date.now() + (tokenSet.expires_in ?? 3600) * 1000
 
   // Preserve existing email on refresh (email is not returned by the refresh grant).
@@ -55,18 +55,17 @@ export function save(tokenSet, email) {
     email:     resolvedEmail,
   })
 
-  // DIAGNOSTIC: call encryptString() unconditionally and observe the result.
-  // If it throws even when isEncryptionAvailable()=false → they are consistent (no timing gap).
-  // If it succeeds despite isEncryptionAvailable()=false → the gate was wrong; keep this path.
+  // encryptString() is called unconditionally (no isEncryptionAvailable() pre-check) - its
+  // own success or failure is authoritative, so a failing backend surfaces immediately as a
+  // thrown error rather than being silently gated on a value that might not reflect it.
   let encrypted
   try {
     encrypted = safeStorage.encryptString(payload)
     console.log('[token-store] save() — encryptString() SUCCEEDED,', encrypted.length, 'bytes')
   } catch (err) {
     console.error('[token-store] save() — encryptString() THREW:', err.message)
-    console.error('[token-store] DIAGNOSTIC RESULT: backend=' + backend +
-                  ' | isEncryptionAvailable=' + available +
-                  ' | encryptString threw — consistent, not a timing issue.')
+    console.error('[token-store] save() — failed with backend=' + backend +
+                  ' | isEncryptionAvailable=' + available)
     throw err
   }
 
@@ -96,7 +95,7 @@ export function load() {
   }
 }
 
-/** Delete tokens.enc — called by wipe() and on refresh failure. */
+/** Delete tokens.enc - called by wipe() and on refresh failure. */
 export function clearTokens() {
   try {
     unlinkSync(tokensPath())
@@ -108,7 +107,7 @@ export function clearTokens() {
 
 /**
  * Return a valid access token, refreshing transparently if needed.
- * Returns null when there are no stored tokens or refresh fails (→ triggers re-auth in Step 4).
+ * Returns null when there are no stored tokens or refresh fails (-> triggers re-auth).
  */
 export async function getValidAccessToken(client) {
   const tokens = load()
@@ -126,7 +125,7 @@ export async function getValidAccessToken(client) {
     console.log('[token-store] getValidAccessToken: access token expired — refreshing')
     try {
       const newTokenSet = await oidcRefresh(client, tokens.refresh)
-      save(newTokenSet) // rotated refresh token — MUST overwrite
+      save(newTokenSet) // rotated refresh token - MUST overwrite
       console.log('[token-store] getValidAccessToken: refresh succeeded')
       return newTokenSet.access_token
     } catch (err) {

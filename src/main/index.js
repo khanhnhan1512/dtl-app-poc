@@ -18,19 +18,19 @@ app.on('select-client-certificate', handleCertSelect)
 
 /**
  * Ensure a valid access token exists before the shell is created.
- * - Valid stored token  → returns { ok: true, email } immediately (warm start, no browser).
- * - No/expired token   → runs the full OIDC flow in the system browser, persists the
+ * - Valid stored token  -> returns { ok: true, email } immediately (warm start, no browser).
+ * - No/expired token   -> runs the full OIDC flow in the system browser, persists the
  *                        new token set, and returns { ok: true, email }.
- * - Domain rejected / flow failure / save failure → returns { ok: false, email: null }.
+ * - Domain rejected / flow failure / save failure -> returns { ok: false, email: null }.
  *
- * Criterion 4: createShell() is only called when ok is true.
- * email is used for session-identity surfacing (M4 Step 1 — observability only).
+ * createShell() is only called when ok is true.
+ * email is used for session-identity surfacing (observability only, not a security boundary).
  */
 async function ensureAuthenticated() {
   logBackend()
   console.log('[auth] userData path:', app.getPath('userData'))
 
-  // Discover once — the client is reused for both refresh and (if needed) the new flow.
+  // Discover once - the client is reused for both refresh and (if needed) the new flow.
   const client = await getOidcClient()
 
   const accessToken = await getValidAccessToken(client)
@@ -58,7 +58,7 @@ async function ensureAuthenticated() {
 }
 
 app.whenReady().then(async () => {
-  // ── Dev: wipe ──────────────────────────────────────────────────────────────────────
+  // Dev: wipe.
   if (process.argv.includes('--wipe')) {
     try {
       const result = await wipe()
@@ -71,7 +71,7 @@ app.whenReady().then(async () => {
     return
   }
 
-  // ── Dev: OIDC round-trip + token persistence + reload verification. No app window. ─
+  // Dev: OIDC round-trip + token persistence + reload verification. No app window.
   if (process.argv.includes('--login')) {
     try {
       logBackend()
@@ -80,7 +80,7 @@ app.whenReady().then(async () => {
       const { client, tokenSet, claims, userinfoClaims, email, emailVerified, allowed } =
         await runLoginFlow()
 
-      // Verbose diagnostics — kept for dev/debug purposes.
+      // Verbose diagnostics - kept for dev/debug purposes.
       console.log('[login] id_token claims:', JSON.stringify(claims, null, 2))
       console.log('[login] userinfo claims:', JSON.stringify(userinfoClaims, null, 2))
       console.log(`[login] email          : ${email}`)
@@ -109,19 +109,19 @@ app.whenReady().then(async () => {
     return
   }
 
-  // ── Normal launch: gate portal on authentication (M2 Step 4) ───────────────────────
+  // Normal launch: gate portal on authentication.
   const { ok: authenticated, email: sessionEmail } = await ensureAuthenticated()
   if (!authenticated) {
-    console.error('[auth] Authentication failed — portal will not load (criterion 4)')
+    console.error('[auth] Authentication failed — portal will not load')
     app.quit()
     return
   }
 
-  // M4 Step 1's did-navigate identity hook now lives in window.js (M1b — generalized from the
-  // single old HOME_URL to any TOOLS host, and extended to drive the chrome bar state).
+  // The did-navigate identity hook lives in window.js - it covers any TOOLS host (not just a
+  // single fixed home URL) and also drives the chrome bar state.
   createShell({ userEmail: sessionEmail })
 
-  // M3 Step 5: start periodic kill-command poller (immediate check + interval).
+  // Start the periodic kill-command poller (immediate check + interval).
   startKillPoller()
 })
 

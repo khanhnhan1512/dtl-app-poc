@@ -6,7 +6,7 @@ import { OIDC } from '../config.js'
 /**
  * Run the full authorization-code + PKCE flow in the system browser.
  *
- * Opens the system browser (RFC 8252 §7.3 — never an embedded view), waits for the
+ * Opens the system browser (RFC 8252 §7.3 - never an embedded view), waits for the
  * loopback callback, exchanges the code for tokens, and checks the email-domain claim.
  *
  * Returns { client, tokenSet, claims, userinfoClaims, email, emailVerified, allowed }.

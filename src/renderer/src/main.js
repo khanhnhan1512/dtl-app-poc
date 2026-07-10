@@ -39,6 +39,6 @@ function applyState(state) {
 
 backBtn.addEventListener('click', () => window.dtlChrome.goHome())
 window.dtlChrome.onState(applyState)
-// Registered AFTER onState — guarantees Main's re-push (triggered by this ready ping) arrives
+// Registered AFTER onState - guarantees Main's re-push (triggered by this ready ping) arrives
 // after the listener above is in place, closing the initial-state race.
 window.dtlChrome.ready()

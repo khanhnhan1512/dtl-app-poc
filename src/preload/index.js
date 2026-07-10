@@ -1,2 +1,2 @@
-// Preload script — no privileged APIs exposed in M0.
+// Preload script - no privileged APIs exposed.
 // Renderer is fully isolated: sandbox:true, contextIsolation:true, nodeIntegration:false.

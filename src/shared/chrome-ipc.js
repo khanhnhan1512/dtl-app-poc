@@ -1,5 +1,5 @@
-// Shared IPC channel names for the chrome bar preload ↔ Main process contract (M1b).
-// Zero Electron/Node dependency — safe to import from both the preload build and Main.
+// Shared IPC channel names for the chrome bar preload ↔ Main process contract.
+// Zero Electron/Node dependency - safe to import from both the preload build and Main.
 export const CHROME_STATE_CHANNEL = 'chrome:state'
 export const CHROME_GO_HOME_CHANNEL = 'chrome:go-home'
 // Sent by the chrome bar's renderer script once it has registered its onState listener, so Main

@@ -1,27 +1,20 @@
 #!/usr/bin/env bash
-# setup.sh — ONE command to stand up the entire DTL App test lab from scratch, headless.
+# setup.sh - stand up the entire DTL App test lab from scratch, headless. Only the SETUP is
+# automated (zero Web Console interaction) - the OIDC auth flow itself is untouched.
 #
-# Brings up: OpenSSL cert chain -> NSS provisioning -> nginx (:8443/:8444/:8445) ->
-#            Postgres -> Zitadel (start-from-init, auto-seeded machine SA + PAT) ->
-#            seed Project + Native PKCE App + testuser@dtl.local via Management API ->
-#            write lab/.runtime-env (fresh client_id + absolute DTL_KILL_CA_PATH).
-#
-# ZERO Web Console interaction. Real Zitadel (Authorization Code + PKCE) — only the SETUP is
-# automated, never the auth.
-#
-# ⚠️ ONE-WAY DOOR (plan Decision 12): the clean-slate step DESTROYS any existing manually-seeded
-#    Zitadel on :8090 and re-seeds from scratch. Intended (reproducible-from-scratch) but
-#    irreversible — only run this once you're ready to switch to the auto-seeded instance.
+# WARNING: ONE-WAY DOOR - the clean-slate step destroys any existing Zitadel
+# instance on :8090 and re-seeds from scratch. Irreversible - only run this
+# once you're ready to switch to the auto-seeded instance.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-# Pinned image (v4+ breaks the single-container console — see lab/zitadel/README.md).
+# Pinned image (v4+ breaks the single-container console - see lab/zitadel/README.md).
 ZITADEL_IMAGE="ghcr.io/zitadel/zitadel:v2.71.10"
 POSTGRES_IMAGE="postgres:16-alpine"
 NGINX_IMAGE="nginx:alpine"
-MASTERKEY="MasterkeyNeedsToHave32Characters"   # exactly 32 chars — throwaway local value
+MASTERKEY="MasterkeyNeedsToHave32Characters"   # exactly 32 chars - throwaway local value
 SEED_DIR="$REPO_ROOT/lab/zitadel/.seed"
 PAT_FILE="$SEED_DIR/pat.txt"
 RUNTIME_ENV="$REPO_ROOT/lab/.runtime-env"
@@ -30,8 +23,8 @@ CA_ABS="$REPO_ROOT/lab/certs/ca.pem"
 log()  { echo "[setup] $*"; }
 die()  { echo "[setup] ERROR: $*" >&2; exit 1; }
 
-# ── Step 0: preflight — prerequisites are checked, never installed (no sudo assumed) ─────────────
-log "Step 0/11 — preflight prerequisite check..."
+# Step 0: preflight - prerequisites are checked, never installed (no sudo assumed)
+log "Step 0/11 - preflight prerequisite check..."
 MISSING=()
 for bin in podman node npm openssl certutil pk12util curl python3 dbus-run-session gnome-keyring-daemon; do
   command -v "$bin" >/dev/null 2>&1 || MISSING+=("$bin")
@@ -45,11 +38,12 @@ if (( ${#MISSING[@]} )); then
   echo "  certutil / pk12util                : sudo apt install libnss3-tools" >&2
   echo "  gnome-keyring-daemon / python3-dbus : sudo apt install gnome-keyring python3-dbus" >&2
   echo "  openssl / curl / python3            : base system packages" >&2
-  die "prerequisites missing — nothing was changed. Install the above and re-run."
+  die "prerequisites missing - nothing was changed. Install the above and re-run."
 fi
 log "all prerequisites present."
 
-# ── config.js is the SINGLE SOURCE OF TRUTH for issuer + redirect (plan Decision 13) ─────────────
+# config.js is the SINGLE SOURCE OF TRUTH for issuer + redirect - everything below is
+# derived from it so the lab can never silently drift from what the app actually uses.
 CFG="src/main/config.js"
 ISSUER="$(grep -oP "issuerUrl:\s*process\.env\.DTL_OIDC_ISSUER\s*\|\|\s*'\K[^']+" "$CFG")"
 REDIRECT_URI="$(grep -oP "redirectUri:\s*process\.env\.DTL_OIDC_REDIRECT\s*\|\|\s*'\K[^']+" "$CFG")"
@@ -58,22 +52,19 @@ DEVICE_CN="$(grep -oP "CERT_SUBJECT_CN = process\.env\.DTL_CERT_CN \|\| '\K[^']+
 ZITADEL_PORT="${ISSUER##*:}"   # e.g. 8090
 log "config.js issuer=$ISSUER redirect=$REDIRECT_URI device=$DEVICE_CN (zitadel port $ZITADEL_PORT)"
 
-# ── Step 1: clean slate (reuses teardown's --for-setup subset — DRY) ─────────────────────────────
-log "Step 1/11 — clean slate (removing prior lab containers/volume/runtime-env/app-state)..."
+# Step 1: clean slate (reuses teardown's --for-setup subset - DRY)
+log "Step 1/11 - clean slate (removing prior lab containers/volume/runtime-env/app-state)..."
 bash "$REPO_ROOT/lab/teardown.sh" --for-setup
 
-# ── Step 2: certs ────────────────────────────────────────────────────────────────────────────────
-log "Step 2/11 — generating OpenSSL cert chain..."
+log "Step 2/11 - generating OpenSSL cert chain..."
 bash "$REPO_ROOT/lab/certs/gen-certs.sh" >/dev/null
 log "certs generated."
 
-# ── Step 3: NSS provisioning ─────────────────────────────────────────────────────────────────────
-log "Step 3/11 — provisioning NSS (CA + client cert/key into ~/.pki/nssdb)..."
+log "Step 3/11 - provisioning NSS (CA + client cert/key into ~/.pki/nssdb)..."
 bash "$REPO_ROOT/lab/provision-nss.sh" >/dev/null
 log "NSS provisioned."
 
-# ── Step 4: nginx on all three ports ─────────────────────────────────────────────────────────────
-log "Step 4/11 — starting nginx (:8443 mTLS, :8444 optional+/kill, :8445 CN-gated 403)..."
+log "Step 4/11 - starting nginx (:8443 mTLS, :8444 optional+/kill, :8445 CN-gated 403)..."
 podman run -d --name dtl-mtls-nginx \
   -p 8443:8443 -p 8444:8444 -p 8445:8445 \
   -v "$REPO_ROOT/lab/nginx/mtls.conf:/etc/nginx/conf.d/default.conf:ro,Z" \
@@ -82,15 +73,15 @@ podman run -d --name dtl-mtls-nginx \
   "$NGINX_IMAGE" >/dev/null
 log "nginx up."
 
-# ── Step 5: kill-switch keypair (FRESH per machine) + a matching no-op kill-command ──────────────
-# config.js's KILL.publicKeyPem is env-overridable (DTL_KILL_PUBLIC_KEY_PEM, no app code change —
+# Step 5: kill-switch keypair (FRESH per machine) + a matching no-op kill-command.
+# config.js's KILL.publicKeyPem is env-overridable (DTL_KILL_PUBLIC_KEY_PEM, no app code change -
 # same pattern as DTL_OIDC_CLIENT_ID). teardown.sh removes kill-signing.key/.pub as app-trace
 # cleanup, so a fresh keypair must be generated here and its PUBLIC half handed to the app via
-# runtime-env — otherwise sign-command.sh has no key to sign with, or (worse) a stale pinned
+# runtime-env - otherwise sign-command.sh has no key to sign with, or (worse) a stale pinned
 # public key would reject every freshly-signed command as a bad signature.
 # gen-keypair.sh refuses to run if a key already exists, so reset first (idempotent regardless of
 # whether teardown.sh ran immediately before this).
-log "Step 5/11 — generating a fresh kill-switch signing keypair..."
+log "Step 5/11 - generating a fresh kill-switch signing keypair..."
 rm -f "$REPO_ROOT/lab/kill/kill-signing.key" "$REPO_ROOT/lab/kill/kill-signing.pub"
 bash "$REPO_ROOT/lab/kill/gen-keypair.sh" >/dev/null
 KILL_PUB_PEM="$(cat "$REPO_ROOT/lab/kill/kill-signing.pub")"
@@ -98,15 +89,16 @@ KILL_PUB_PEM="$(cat "$REPO_ROOT/lab/kill/kill-signing.pub")"
 log "keypair generated."
 
 # The committed sample fixtures (lab/kill/kill-none.json, kill-wipe.json, etc.) were signed with
-# the ORIGINAL fixed dev-box key and will NOT verify against this fresh one — sign a fresh no-op
+# the ORIGINAL fixed dev-box key and will NOT verify against this fresh one - sign a fresh no-op
 # directly with the current key instead of copying a stale pre-signed file.
 log "signing a fresh no-op kill-command..."
 bash "$REPO_ROOT/lab/kill/sign-command.sh" "$DEVICE_CN" cmd-noop none > "$REPO_ROOT/lab/kill/kill-command.json"
 chmod 644 "$REPO_ROOT/lab/kill/kill-command.json"
 log "active kill-command initialized (no-op, signed with the fresh key)."
 
-# ── Step 6: Postgres (fresh volume — clean init every run, plan Decision 4) ──────────────────────
-log "Step 6/11 — starting Postgres (fresh zitadel-db volume)..."
+# Step 6: Postgres (fresh volume - clean init every run, so each lab run starts from an
+# empty database instead of accumulating state across re-runs)
+log "Step 6/11 - starting Postgres (fresh zitadel-db volume)..."
 podman run -d --name zitadel-db --network=host \
   -e POSTGRES_USER=root -e POSTGRES_PASSWORD=rootpassword \
   -v zitadel-db:/var/lib/postgresql/data \
@@ -119,8 +111,8 @@ for i in $(seq 1 20); do
 done
 log "Postgres ready."
 
-# ── Step 7: Zitadel init + FirstInstance machine SA + PAT (auto-written to a file) ───────────────
-log "Step 7/11 — starting Zitadel (start-from-init, seeding machine SA + PAT)..."
+# Step 7: Zitadel init + FirstInstance machine SA + PAT (auto-written to a file)
+log "Step 7/11 - starting Zitadel (start-from-init, seeding machine SA + PAT)..."
 mkdir -p "$SEED_DIR"; chmod 777 "$SEED_DIR"   # container (rootless, high uid) must write the PAT here
 podman run -d --name zitadel --network=host \
   -v "$SEED_DIR:/pat:Z" \
@@ -157,7 +149,8 @@ for i in $(seq 1 36); do
 done
 log "Zitadel up."
 
-# Assert discovery issuer matches config.js (Decision 13 — catch issuer drift early).
+# Assert discovery issuer matches config.js - catches issuer drift early instead of failing
+# confusingly later, deep inside the OIDC flow.
 DISC_ISSUER="$(curl -sf "$ISSUER/.well-known/openid-configuration" | python3 -c "import sys,json;print(json.load(sys.stdin)['issuer'])")"
 [[ "$DISC_ISSUER" == "$ISSUER" ]] || die "issuer mismatch: discovery='$DISC_ISSUER' config.js='$ISSUER'"
 log "discovery issuer matches config.js: $DISC_ISSUER"
@@ -170,16 +163,17 @@ for i in $(seq 1 10); do
 done
 log "PAT seeded ($(wc -c < "$PAT_FILE") bytes)."
 
-# ── Step 8+9: seed Project + Native PKCE App + user, with redirect-match + same-org asserts ──────
-log "Step 8-9/11 — seeding Project + Native PKCE App + testuser via Management API..."
+# Step 8+9: seed Project + Native PKCE App + user, with redirect-match + same-org asserts
+log "Step 8-9/11 - seeding Project + Native PKCE App + testuser via Management API..."
 CLIENT_ID="$(bash "$REPO_ROOT/lab/zitadel/seed-zitadel.sh" "$PAT_FILE" "$ISSUER" "$REDIRECT_URI")"
 [[ -n "$CLIENT_ID" ]] || die "seed-zitadel.sh returned no client_id"
 log "seeded client_id: $CLIENT_ID"
 
-# ── Step 10: write runtime-env (fresh client_id + CA path + kill pubkey — Decisions 2,3,16) ──────
-log "Step 10/11 — writing $RUNTIME_ENV ..."
+# Step 10: write runtime-env (fresh client_id + CA path + kill pubkey - these are all
+# per-machine values a packaged .deb can't know at build time, so they're injected here)
+log "Step 10/11 - writing $RUNTIME_ENV ..."
 cat > "$RUNTIME_ENV" <<EOF
-# Generated by lab/setup.sh — per-machine, git-ignored, DO NOT COMMIT.
+# Generated by lab/setup.sh - per-machine, git-ignored, DO NOT COMMIT.
 # 'source' this before launching the app so the packaged binary picks up the fresh client_id,
 # absolute kill-CA path, and fresh kill-switch public key at RUNTIME (build-time .env is
 # irrelevant to a .deb; a stale pinned public key would reject every freshly-signed command).
@@ -190,11 +184,10 @@ EOF
 chmod 600 "$RUNTIME_ENV"
 log "runtime-env written."
 
-# ── Step 11: summary ─────────────────────────────────────────────────────────────────────────────
 cat <<EOF
 
 [setup] ============================================================
-[setup] DONE. Lab is up and seeded — zero console interaction.
+[setup] DONE. Lab is up and seeded - zero console interaction.
 [setup]   Zitadel : $ISSUER  (user: testuser@dtl.local / Test1234!)
 [setup]   client_id: $CLIENT_ID
 [setup]   nginx   : :8443 (tool-1)  :8444 (/kill)  :8445 (tool-2 403)
@@ -207,10 +200,10 @@ cat <<EOF
 [setup]   curl -s -o /dev/null -w '%{http_code}\\n' --cacert ca.pem --cert client.crt --key client.key https://localhost:8445/   # 403
 [setup]   curl -s --cacert ca.pem https://localhost:8444/     # verify=NONE
 [setup]
-[setup] Launch the app (NoMachine DESKTOP terminal — one command, no keyring dialog of any kind):
+[setup] Launch the app (NoMachine DESKTOP terminal - one command, no keyring dialog of any kind):
 [setup]   bash lab/run-app.sh
-[setup]   # sources lab/.runtime-env + bootstraps/unlocks the keyring silently (empty pw) — zero prompts.
-[setup]   # packaged .deb: set DTL_APP_BIN (see lab/run-app.sh header for exact quoting — the
+[setup]   # sources lab/.runtime-env + bootstraps/unlocks the keyring silently (empty pw) - zero prompts.
+[setup]   # packaged .deb: set DTL_APP_BIN (see lab/run-app.sh header for exact quoting - the
 [setup]   #                path has a space, "DTL App"), then run lab/run-app.sh
 [setup] ============================================================
 EOF

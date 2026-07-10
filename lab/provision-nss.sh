@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Imports the DTL test CA and client cert+key into the NSS shared DB (~/.pki/nssdb).
-# Idempotent — safe to re-run; removes existing entries before re-importing.
+# Idempotent - safe to re-run; removes existing entries before re-importing.
 # Prerequisite: run lab/certs/gen-certs.sh first.
 set -euo pipefail
 

@@ -9,7 +9,7 @@ export async function getOidcClient() {
     client_id: OIDC.clientId,
     redirect_uris: [OIDC.redirectUri],
     response_types: ['code'],
-    token_endpoint_auth_method: 'none', // native/public PKCE app — no secret
+    token_endpoint_auth_method: 'none', // native/public PKCE app - no secret
   })
 }
 
@@ -63,7 +63,7 @@ export async function exchangeCode(client, code, state, codeVerifier, nonce) {
 }
 
 /**
- * Silent refresh — wraps client.refresh(); caller must persist the returned tokenSet
+ * Silent refresh - wraps client.refresh(); caller must persist the returned tokenSet
  * immediately because refresh tokens ROTATE on use.
  */
 export async function refresh(client, refreshToken) {

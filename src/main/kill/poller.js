@@ -1,8 +1,8 @@
-// Kill-switch poller — M3 Step 5 (launch + periodic interval).
+// Kill-switch poller (launch + periodic interval).
 // Fetches the control-plane endpoint, verifies the signed command, dispatches.
-// D-M3-8: FAIL-OPEN — unreachable control plane is logged and ignored.
-// D-M3-9: endpoint is https://localhost:8444/kill (non-mTLS, lab CA trusted explicitly).
-// D-M3-10: post-kill the app quits; locked-out state surfaces on next relaunch.
+// FAIL-OPEN: unreachable control plane is logged and ignored.
+// Endpoint is https://localhost:8444/kill (non-mTLS, lab CA trusted explicitly).
+// Post-kill the app quits; locked-out state surfaces on next relaunch.
 import { app } from 'electron'
 import { request as httpsRequest } from 'https'
 import { readFileSync } from 'fs'
@@ -31,7 +31,7 @@ function fetchKillCommand() {
       port: url.port || 443,
       path: url.pathname,
       method: 'GET',
-      ca: caPem,       // trust ONLY this CA — NOT rejectUnauthorized:false
+      ca: caPem,       // trust ONLY this CA - NOT rejectUnauthorized:false
       timeout: 5000,
     }
 
@@ -48,7 +48,7 @@ function fetchKillCommand() {
 
 /**
  * Fetch, parse, verify, and dispatch the verdict once.
- * VALID_WIPE → record command_id → wipe() → quit.
+ * VALID_WIPE -> record command_id -> wipe() -> quit.
  * All reject paths and VALID_NONE: log only, no side effects.
  */
 export async function checkKillOnce() {
@@ -57,7 +57,7 @@ export async function checkKillOnce() {
   try {
     body = await fetchKillCommand()
   } catch (err) {
-    // D-M3-8: fail-open; unreachable control plane is never destructive.
+    // Fail-open; unreachable control plane is never destructive.
     console.log('[kill] control plane unreachable — ignoring (fail-open):', err.message)
     return
   }
@@ -77,15 +77,15 @@ export async function checkKillOnce() {
       // Idempotency: record BEFORE the destructive call so a crash/race after wipe()
       // but before quit() cannot re-execute the same command_id after recovery.
       ledger.record(doc.command_id)
-      console.log('[kill] VALID_WIPE — executing wipe (M2 full-scope: session + cert + tokens)')
+      console.log('[kill] VALID_WIPE — executing wipe (session + cert + tokens)')
       try {
         const result = await wipe()
         console.log('[kill] wipe() result:', result)
       } catch (err) {
         console.error('[kill] wipe() threw:', err.message)
       }
-      // D-M3-10: quit after wipe; locked-out state surfaces on next relaunch via M2 auth gate
-      // (no token → forced re-login) and M0 mTLS (no cert → nginx 400).
+      // Quit after wipe; locked-out state surfaces on next relaunch via the auth gate
+      // (no token -> forced re-login) and mTLS (no cert -> nginx 400).
       console.log('[kill] kill complete — quitting app')
       app.quit()
       return
@@ -119,7 +119,7 @@ export async function checkKillOnce() {
 /**
  * Start the kill-switch poller: one immediate check at launch, then a periodic interval.
  * Overlap guard: if a tick is still in flight when the next interval fires, that tick is
- * skipped — preventing stacked async calls on a slow/hung control plane.
+ * skipped - preventing stacked async calls on a slow/hung control plane.
  * After VALID_WIPE fires app.quit() the interval is moot; no explicit clearInterval needed.
  */
 export function startKillPoller() {
@@ -135,7 +135,7 @@ export function startKillPoller() {
     finally { running = false }
   }
 
-  // Immediate launch check (no await — returns to caller; interval fires later).
+  // Immediate launch check (no await - returns to caller; interval fires later).
   tick()
   setInterval(tick, KILL.pollIntervalMs)
   console.log('[kill] poller started — interval', KILL.pollIntervalMs, 'ms')

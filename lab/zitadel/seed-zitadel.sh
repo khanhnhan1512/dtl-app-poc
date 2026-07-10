@@ -1,20 +1,10 @@
 #!/usr/bin/env bash
-# seed-zitadel.sh — auto-seed the Zitadel resources the DTL app needs, headless (no console).
-#
-# Mechanism (confirmed empirically on v2.71.10):
-#   Zitadel FirstInstance seeds a machine (service-account) user + PAT to a file on first
-#   start-from-init. THIS script uses that PAT against the Management REST API to create:
-#     1. Project        "DTL App"
-#     2. Native PKCE App "dtl-electron"  (auth method NONE — public client, no secret)
-#     3. Human user      testuser@dtl.local  (email verified, password preset, no mail)
-#
-# It ASSERTS (fails loud, non-zero, no partial output) — per plan Decisions 13 & 14:
-#   - the created app's registered redirect === the redirect passed in (config.js source of truth)
-#   - the created app has NO client secret (proves public PKCE native app)
-#   - the app and the user share the same resourceOwner (same Zitadel org)
+# seed-zitadel.sh - auto-seed the Zitadel resources the DTL app needs, headless (no console).
+# Uses the machine-account token Zitadel writes to disk on first boot to call its Management
+# API directly, creating a project, a native PKCE app, and a test user.
 #
 # Usage:  seed-zitadel.sh <pat-file> <issuer-base-url> <redirect-uri>
-# Output: the fresh client_id on stdout (nothing else on stdout — captured by setup.sh).
+# Output: the fresh client_id on stdout (nothing else on stdout - captured by setup.sh).
 set -euo pipefail
 
 PAT_FILE="${1:?Usage: seed-zitadel.sh <pat-file> <issuer-base-url> <redirect-uri>}"
@@ -55,7 +45,7 @@ jget() {
 log "authenticating PAT (whoami)..."
 WHO="$(api GET /auth/v1/users/me)"
 SA_USER="$(jget "$WHO" "d.get('user',{}).get('userName')")"
-[[ -n "$SA_USER" ]] || die "PAT auth failed — /auth/v1/users/me returned no user"
+[[ -n "$SA_USER" ]] || die "PAT auth failed - /auth/v1/users/me returned no user"
 log "PAT ok, service account: $SA_USER"
 
 log "creating project 'DTL App'..."
@@ -84,15 +74,14 @@ CLIENT_ID="$(jget "$APP" "d.get('clientId')")"
 APP_ID="$(jget "$APP" "d.get('appId')")"
 CLIENT_SECRET="$(jget "$APP" "d.get('clientSecret','')")"
 [[ -n "$CLIENT_ID" ]] || die "app create returned no clientId"
-[[ -z "$CLIENT_SECRET" ]] || die "app has a client secret — not a public PKCE native app (Decision 13)"
-log "client_id: $CLIENT_ID (no secret — public PKCE native app, ok)"
+[[ -z "$CLIENT_SECRET" ]] || die "app has a client secret - expected a public PKCE client with no secret (a native Electron app can't keep a secret confidential)"
+log "client_id: $CLIENT_ID (no secret - public PKCE native app, ok)"
 
-# Decision 13: re-fetch the app and assert the registered redirect matches EXACTLY.
 log "verifying registered redirect matches config.js ($REDIRECT_URI)..."
 APP_GET="$(api GET "/management/v1/projects/$PID/apps/$APP_ID")"
 REG_REDIRECT="$(jget "$APP_GET" "(d.get('app',{}).get('oidcConfig',{}).get('redirectUris') or [''])[0]")"
 [[ "$REG_REDIRECT" == "$REDIRECT_URI" ]] || \
-  die "redirect mismatch (Decision 13): registered='$REG_REDIRECT' expected='$REDIRECT_URI'"
+  die "redirect mismatch: registered='$REG_REDIRECT' expected='$REDIRECT_URI' (config.js is the source of truth for this value - a mismatch would silently break login)"
 APP_OWNER="$(jget "$APP_GET" "d.get('app',{}).get('details',{}).get('resourceOwner') or d.get('app',{}).get('resourceOwner','')")"
 log "redirect verified; app resourceOwner: $APP_OWNER"
 
@@ -113,7 +102,8 @@ USER="$(api POST /management/v1/users/human/_import "$USER_BODY")"
 USER_ID="$(jget "$USER" "d['userId']")"
 [[ -n "$USER_ID" ]] || die "user import returned no userId"
 
-# Confirm the user is active + email verified, and grab its resourceOwner for the same-org assert.
+# Confirm the user is active and email-verified, and capture its org so it can be checked
+# against the app's org below.
 USER_GET="$(api GET "/management/v1/users/$USER_ID")"
 USER_STATE="$(jget "$USER_GET" "d['user']['state']")"
 USER_VERIFIED="$(jget "$USER_GET" "d['user']['human']['email'].get('isEmailVerified')")"
@@ -122,10 +112,9 @@ USER_OWNER="$(jget "$USER_GET" "d['user'].get('details',{}).get('resourceOwner')
 [[ "$USER_VERIFIED" == "True" ]] || die "user email not verified"
 log "user active + email verified; user resourceOwner: $USER_OWNER"
 
-# Decision 14: app and user must live in the same org.
 [[ -n "$APP_OWNER" && "$APP_OWNER" == "$USER_OWNER" ]] || \
-  die "same-org mismatch (Decision 14): app owner='$APP_OWNER' user owner='$USER_OWNER'"
+  die "same-org mismatch: app owner='$APP_OWNER' user owner='$USER_OWNER' (both must belong to the same Zitadel org for this user to log in to this app)"
 log "same-org verified: $APP_OWNER"
 
-log "seeding complete — emitting client_id on stdout"
+log "seeding complete - emitting client_id on stdout"
 printf '%s\n' "$CLIENT_ID"

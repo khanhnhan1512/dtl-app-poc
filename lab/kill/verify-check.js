@@ -1,12 +1,13 @@
 #!/usr/bin/env node
-// Standalone Ed25519 kill-command verifier — M3 Step 1 hand-verification gate.
-// NO Electron, NO runtime deps — only Node built-in crypto.
+// Standalone Ed25519 kill-command verifier - M3 Step 1 hand-verification gate.
+// NO Electron, NO runtime deps - only Node built-in crypto.
 //
 // Usage:
 //   node lab/kill/verify-check.js <signed-kill-command.json>
 //
 // Exits 0 on VALID, 1 on INVALID.
-// Implements §5 of contracts/kill-command.md (all checks, signature first).
+// Verifies a signed kill-command document: sequential checks below, with the signature checked
+// FIRST so forged or tampered fields are never acted on, even for logging.
 'use strict'
 
 const { verify } = require('crypto')
@@ -59,7 +60,7 @@ if (typeof device_id   !== 'string')  reject('device_id must be a string')
 if (!Number.isInteger(issued_at))     reject('issued_at must be an integer (epoch ms)')
 if (typeof signature   !== 'string')  reject('signature must be a string')
 
-// Step 3: reconstruct canonical bytes (§2 of contracts/kill-command.md)
+// Step 3: reconstruct canonical bytes
 // Keys in ascending alphabetical order: action < command_id < device_id < issued_at
 const canonical = JSON.stringify({ action, command_id, device_id, issued_at })
 const canonicalBytes = Buffer.from(canonical, 'utf8')

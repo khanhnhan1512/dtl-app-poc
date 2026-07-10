@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Re-injects the DTL client cert+key into NSS after a wipe.
-# Idempotent — safe to re-run. The CA (DTL-Test-Root-CA) is NOT touched (it survives a wipe).
+# Idempotent - safe to re-run. The CA (DTL-Test-Root-CA) is NOT touched (it survives a wipe).
 # Prerequisite: run lab/certs/gen-certs.sh first to generate client.p12.
 set -euo pipefail
 
