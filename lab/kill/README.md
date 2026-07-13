@@ -48,7 +48,7 @@ manual config.js edit is needed. If you regenerate the keypair by hand instead, 
 ## VERIFY - hand-verification gate (no Electron needed)
 
 ```bash
-cd ~/Downloads/dtl-app
+cd <repo-root>   # wherever you cloned it
 
 # Sign fresh wipe/no-op samples (safe to re-run; does not depend on BRING UP having run):
 bash lab/kill/sign-command.sh DTL-Ubuntu-Test-Device cmd-verify-wipe wipe 2>/dev/null > /tmp/kill-wipe.json
@@ -83,7 +83,7 @@ The kill endpoint is `https://localhost:8444/kill` (TLS, no client cert required
 ### First-time setup (or after container was removed)
 
 ```bash
-cd ~/Downloads/dtl-app
+cd <repo-root>   # wherever you cloned it
 
 # Initialize active command to no-op:
 bash lab/kill/sign-command.sh DTL-Ubuntu-Test-Device cmd-init none 2>/dev/null > lab/kill/kill-command.json
@@ -92,16 +92,16 @@ bash lab/kill/sign-command.sh DTL-Ubuntu-Test-Device cmd-init none 2>/dev/null >
 podman stop dtl-mtls-nginx; podman rm dtl-mtls-nginx 2>/dev/null || true
 podman run -d --name dtl-mtls-nginx \
   -p 8443:8443 -p 8444:8444 \
-  -v ~/Downloads/dtl-app/lab/nginx/mtls.conf:/etc/nginx/conf.d/default.conf:ro,Z \
-  -v ~/Downloads/dtl-app/lab/certs:/etc/nginx/certs:ro,Z \
-  -v ~/Downloads/dtl-app/lab/kill:/etc/nginx/kill:ro,Z \
+  -v "$(pwd)/lab/nginx/mtls.conf:/etc/nginx/conf.d/default.conf:ro,Z" \
+  -v "$(pwd)/lab/certs:/etc/nginx/certs:ro,Z" \
+  -v "$(pwd)/lab/kill:/etc/nginx/kill:ro,Z" \
   nginx:alpine
 ```
 
 ### Verify Step 2
 
 ```bash
-cd ~/Downloads/dtl-app
+cd <repo-root>   # wherever you cloned it
 
 # 1. Returns signed JSON (action:"none"):
 curl -s --cacert lab/certs/ca.pem https://localhost:8444/kill

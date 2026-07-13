@@ -27,15 +27,15 @@ The manual step-by-step below is kept as reference / fallback for machines where
 bash lab/certs/gen-certs.sh
 
 # 2. Initialize the active kill-command to no-op (once per machine; re-run after a wipe demo)
-bash ~/Downloads/dtl-app/lab/kill/sign-command.sh DTL-Ubuntu-Test-Device cmd-init none 2>/dev/null > ~/Downloads/dtl-app/lab/kill/kill-command.json
+bash lab/kill/sign-command.sh DTL-Ubuntu-Test-Device cmd-init none 2>/dev/null > lab/kill/kill-command.json
 
 # 3. Start nginx container (four server blocks: :8443 mTLS on (tool-1), :8445 mTLS on + CN gate
 #    (tool-2, always 403 for this device), :8444 mTLS optional + /kill endpoint)
 podman run -d --name dtl-mtls-nginx \
   -p 8443:8443 -p 8444:8444 -p 8445:8445 \
-  -v ~/Downloads/dtl-app/lab/nginx/mtls.conf:/etc/nginx/conf.d/default.conf:ro,Z \
-  -v ~/Downloads/dtl-app/lab/certs:/etc/nginx/certs:ro,Z \
-  -v ~/Downloads/dtl-app/lab/kill:/etc/nginx/kill:ro,Z \
+  -v "$(pwd)/lab/nginx/mtls.conf:/etc/nginx/conf.d/default.conf:ro,Z" \
+  -v "$(pwd)/lab/certs:/etc/nginx/certs:ro,Z" \
+  -v "$(pwd)/lab/kill:/etc/nginx/kill:ro,Z" \
   nginx:alpine
 
 # 4. Import CA + client cert into NSS (~/.pki/nssdb)
@@ -48,7 +48,7 @@ bash lab/reprovision-cert.sh
 ## Verify (curl)
 
 ```bash
-cd ~/Downloads/dtl-app/lab/certs
+cd lab/certs
 
 # WITH cert -> :8443 (expect the tool-1 HTML page; grep the embedded comment for verify=SUCCESS -
 # the body is HTML, but the verify=/subject= line is kept as an HTML
@@ -69,6 +69,7 @@ curl -s --cacert ca.pem --cert client.crt --key client.key https://localhost:844
 
 # Kill endpoint - :8444/kill, no client cert needed
 curl -s --cacert ca.pem https://localhost:8444/kill
+cd ../..
 ```
 
 ## Navigation test page
@@ -89,9 +90,9 @@ Static files (`kill-command.json`) are served fresh on each request - no restart
 podman stop dtl-mtls-nginx && podman rm dtl-mtls-nginx
 podman run -d --name dtl-mtls-nginx \
   -p 8443:8443 -p 8444:8444 -p 8445:8445 \
-  -v ~/Downloads/dtl-app/lab/nginx/mtls.conf:/etc/nginx/conf.d/default.conf:ro,Z \
-  -v ~/Downloads/dtl-app/lab/certs:/etc/nginx/certs:ro,Z \
-  -v ~/Downloads/dtl-app/lab/kill:/etc/nginx/kill:ro,Z \
+  -v "$(pwd)/lab/nginx/mtls.conf:/etc/nginx/conf.d/default.conf:ro,Z" \
+  -v "$(pwd)/lab/certs:/etc/nginx/certs:ro,Z" \
+  -v "$(pwd)/lab/kill:/etc/nginx/kill:ro,Z" \
   nginx:alpine
 ```
 
@@ -102,11 +103,11 @@ sign a new command directly to change what the app's next poll sees.
 
 ```bash
 # No-op (app polls, nothing happens):
-bash ~/Downloads/dtl-app/lab/kill/sign-command.sh DTL-Ubuntu-Test-Device cmd-demo-none none 2>/dev/null > ~/Downloads/dtl-app/lab/kill/kill-command.json
+bash lab/kill/sign-command.sh DTL-Ubuntu-Test-Device cmd-demo-none none 2>/dev/null > lab/kill/kill-command.json
 
 # Activate wipe (next app poll triggers wipe):
-bash ~/Downloads/dtl-app/lab/kill/sign-command.sh DTL-Ubuntu-Test-Device cmd-demo-wipe wipe 2>/dev/null > ~/Downloads/dtl-app/lab/kill/kill-command.json
+bash lab/kill/sign-command.sh DTL-Ubuntu-Test-Device cmd-demo-wipe wipe 2>/dev/null > lab/kill/kill-command.json
 
 # Confirm what's currently served:
-curl -s --cacert ~/Downloads/dtl-app/lab/certs/ca.pem https://localhost:8444/kill | python3 -m json.tool
+curl -s --cacert lab/certs/ca.pem https://localhost:8444/kill | python3 -m json.tool
 ```

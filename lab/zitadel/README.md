@@ -21,7 +21,7 @@ Native PKCE App + `testuser@dtl.local` with **zero web-console clicks**. It writ
 `client_id` into `lab/.runtime-env` (per-machine, git-ignored).
 
 ```bash
-cd ~/Downloads/dtl-app
+cd <repo-root>   # wherever you cloned it
 bash lab/setup.sh        # one command - certs -> nginx(:8443/:8444/:8445) -> Zitadel -> seeded app+user
 ```
 
@@ -32,7 +32,7 @@ bash lab/setup.sh        # one command - certs -> nginx(:8443/:8444/:8445) -> Zi
 **Launch after setup - one command, no keyring prompt** (run from the NoMachine DESKTOP terminal):
 
 ```bash
-cd ~/Downloads/dtl-app
+cd <repo-root>   # wherever you cloned it
 bash lab/run-app.sh          # sources lab/.runtime-env + unlocks the keyring silently -> launches
 ```
 
@@ -285,7 +285,7 @@ reference. Note the two-step keyring bootstrap - `--unlock` (empty password) **p
 automated-path section above for why `--unlock` alone isn't enough, and why NOT `--password-store=basic`):
 
 ```bash
-cd ~/Downloads/dtl-app
+cd <repo-root>   # wherever you cloned it
 source lab/.runtime-env
 
 dbus-run-session -- bash -c '
