@@ -10,8 +10,8 @@
 #
 # Output: signed kill-command JSON printed to stdout.
 # Example:
-#   ./sign-command.sh DTL-Ubuntu-Test-Device cmd-001 wipe > kill-wipe.json
-#   ./sign-command.sh DTL-Ubuntu-Test-Device cmd-002 none > kill-none.json
+#   ./sign-command.sh DTL-Ubuntu-Test-Device cmd-001 wipe 2>/dev/null > kill-wipe.json
+#   ./sign-command.sh DTL-Ubuntu-Test-Device cmd-002 none 2>/dev/null > kill-none.json
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

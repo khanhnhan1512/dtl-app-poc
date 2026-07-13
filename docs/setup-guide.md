@@ -154,7 +154,7 @@ With the app running, sign a fresh wipe command and put it where the control pla
 serves it:
 
 ```bash
-bash lab/kill/sign-command.sh DTL-Ubuntu-Test-Device "cmd-$(date +%s)" wipe > lab/kill/kill-command.json
+bash lab/kill/sign-command.sh DTL-Ubuntu-Test-Device "cmd-$(date +%s)" wipe 2>/dev/null > lab/kill/kill-command.json
 ```
 
 Within 30 seconds (or immediately on relaunch) the poller picks it up. The terminal
@@ -180,7 +180,7 @@ than 24 hours or aimed at a different device.
 
 ```bash
 bash lab/reprovision-cert.sh
-bash lab/kill/sign-command.sh DTL-Ubuntu-Test-Device "cmd-$(date +%s)" none > lab/kill/kill-command.json
+bash lab/kill/sign-command.sh DTL-Ubuntu-Test-Device "cmd-$(date +%s)" none 2>/dev/null > lab/kill/kill-command.json
 ```
 
 Then launch and log in again. Re-provisioning is manual on purpose: a signed command

@@ -93,7 +93,7 @@ log "keypair generated."
 # lab/kill/README.md) may be stale against an older key - sign a fresh no-op directly with the
 # current key instead of copying a possibly-stale pre-signed file.
 log "signing a fresh no-op kill-command..."
-bash "$REPO_ROOT/lab/kill/sign-command.sh" "$DEVICE_CN" cmd-noop none > "$REPO_ROOT/lab/kill/kill-command.json"
+bash "$REPO_ROOT/lab/kill/sign-command.sh" "$DEVICE_CN" cmd-noop none 2>/dev/null > "$REPO_ROOT/lab/kill/kill-command.json"
 chmod 644 "$REPO_ROOT/lab/kill/kill-command.json"
 log "active kill-command initialized (no-op, signed with the fresh key)."
 
@@ -193,7 +193,7 @@ cat <<EOF
 [setup]   client_id: $CLIENT_ID
 [setup]   nginx   : :8443 (tool-1)  :8444 (/kill)  :8445 (tool-2 403)
 [setup]   kill switch: fresh signing keypair generated (lab/kill/kill-signing.key); sign new
-[setup]     commands with: bash lab/kill/sign-command.sh $DEVICE_CN <cmd-id> wipe > lab/kill/kill-command.json
+[setup]     commands with: bash lab/kill/sign-command.sh $DEVICE_CN <cmd-id> wipe 2>/dev/null > lab/kill/kill-command.json
 [setup]
 [setup] Curl-verify the three ports (with the test cert):
 [setup]   cd lab/certs
