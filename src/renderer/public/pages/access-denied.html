@@ -35,7 +35,8 @@
         </svg>
       </div>
       <div style="font-size:18px;font-weight:500;margin-bottom:6px">Access denied</div>
-      <div style="font-size:14px;
+      <div id="message-line"
+           style="font-size:14px;
                   color:var(--text-secondary);
                   line-height:1.6;
                   max-width:440px;
@@ -66,15 +67,33 @@
         </svg>
         <span id="code-line">HTTP - this device is not on the tool's approved list</span>
       </div>
-      <div style="font-size:13px;
+      <div id="recovery-line"
+           style="font-size:13px;
                   color:var(--text-muted);
                   max-width:440px;
                   line-height:1.6">Contact DTL IT if you believe this device should have access to this tool.</div>
     </div>
     <script>
   var code = new URLSearchParams(location.search).get('code') || '?'
-  document.getElementById('code-line').textContent =
-    'HTTP ' + code + " - this device is not on the tool's approved list"
+  var messageEl = document.getElementById('message-line')
+  var codeEl = document.getElementById('code-line')
+  var recoveryEl = document.getElementById('recovery-line')
+
+  if (code === '403') {
+    messageEl.textContent =
+      "This device isn't authorized for this tool. The internal service accepted the connection but refused this device's certificate."
+    codeEl.textContent = 'HTTP 403' + " - this device is not on the tool's approved list"
+    recoveryEl.textContent = 'Contact DTL IT if you believe this device should have access to this tool.'
+  } else if (code === '400') {
+    messageEl.textContent =
+      'This device has no certificate to present. It may have been wiped remotely, or it was never provisioned.'
+    codeEl.textContent = 'HTTP 400 - no device certificate presented'
+    recoveryEl.textContent = 'Contact DTL IT to re-provision the device.'
+  } else {
+    messageEl.textContent = 'This tool refused the connection.'
+    codeEl.textContent = 'HTTP ' + code + ' - connection refused'
+    recoveryEl.textContent = 'Contact DTL IT if this continues.'
+  }
     </script>
   </body>
 </html>
