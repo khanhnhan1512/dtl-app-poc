@@ -62,7 +62,9 @@ multiple independent relaunches - zero prompts, secrets store and read back corr
 > Requires `python3-dbus` (checked by `lab/setup.sh` preflight). If you ever hit a keyring dialog
 > anyway, run `bash lab/teardown.sh` then `bash lab/setup.sh` to reset to the verified clean state.
 >
-> Packaged `.deb`: `DTL_APP_BIN="<unpacked>/opt/DTL App/dtl-app" bash lab/run-app.sh`.
+> Packaged `.deb`: unpacked at the default `~/dtl-app-installed`, `bash lab/run-app.sh` alone
+> auto-detects it. Set `DTL_APP_BIN="<unpacked>/opt/DTL App/dtl-app"` only to override a
+> non-default unpack location.
 
 Tear it all back down (returns the VM to "never ran DTL App"): `bash lab/teardown.sh`.
 

@@ -57,8 +57,15 @@ process.stderr.write('[sign] canonical bytes: ' + canonical + '\n')
 process.stderr.write('[sign] signature (' + sigBytes.length + ' bytes): ' + signature.substring(0, 20) + '...\n')
 NODESCRIPT
 
-# JSON files that nginx serves must be world-readable (nginx runs as a different uid in the container).
-# If output was redirected to a file in this directory, fix it proactively.
+# JSON files that nginx serves must be world-readable (nginx runs as uid 101 inside the
+# container, not root) - AND the containing directory itself must be traversable by "other",
+# or nginx's open() fails with 403/Permission-denied even though the file is 644 (confirmed on
+# a rootless-podman VM: the bind mount preserves this directory's permission bits, and if it
+# has no traversal bit for "other", the uid-101 worker can't reach the file at all). Only the
+# traversal (x) bit is added here, never read/list - do NOT "simplify" this to o+rx, that would
+# expose the directory listing (kill-signing.key's own 600 mode stays protected either way, but
+# there's no reason to make its filename visible).
+chmod o+x "$SCRIPT_DIR" 2>/dev/null || true
 for f in "$SCRIPT_DIR/kill-none.json" "$SCRIPT_DIR/kill-wipe.json" "$SCRIPT_DIR/kill-command.json"; do
   [[ -f "$f" ]] && chmod 644 "$f" 2>/dev/null || true
 done

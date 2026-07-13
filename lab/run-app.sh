@@ -38,17 +38,32 @@ else
   exit 1
 fi
 
-# Launch target: dev binary by default; override with DTL_APP_BIN for a packaged .deb, e.g.
-#   DTL_APP_BIN="\"$HOME/dtl-app-installed/opt/DTL App/dtl-app\"" bash lab/run-app.sh
-# Note the escaped inner \" quotes AND the outer double quotes (not single) - $APP_BIN is spliced
-# unquoted into a bash -c string below, so a path containing a space (like "DTL App") needs its
-# OWN literal quote characters embedded in the value to survive that re-parse. Single-quoting the
-# whole assignment would also stop $HOME from expanding - confirmed both failure modes empirically.
-APP_BIN="${DTL_APP_BIN:-./node_modules/.bin/electron .}"
+# Launch target auto-detection, in priority order:
+#   1. DTL_APP_BIN, if set - explicit override (e.g. a non-default unpack location).
+#   2. The unpacked packaged .deb at ~/dtl-app-installed, if present - the normal user path.
+#   3. The dev source tree (node_modules/.bin/electron .) - the normal developer path.
+# APP_BIN/APP_ARGS are passed to the inner bash -c as separate positional parameters, not
+# spliced into the script text, so a path containing a space (like "DTL App") needs no manual
+# quoting from the caller - bash's own argument passing keeps it intact as one value.
+PACKAGED_BIN="$HOME/dtl-app-installed/opt/DTL App/dtl-app"
+if [[ -n "${DTL_APP_BIN:-}" ]]; then
+  APP_BIN="$DTL_APP_BIN"
+  APP_ARGS=()
+  echo "[run-app] launch mode: override - $APP_BIN"
+elif [[ -x "$PACKAGED_BIN" ]]; then
+  APP_BIN="$PACKAGED_BIN"
+  APP_ARGS=()
+  echo "[run-app] launch mode: packaged .deb - $APP_BIN"
+else
+  APP_BIN="./node_modules/.bin/electron"
+  APP_ARGS=(".")
+  echo "[run-app] launch mode: dev source - $APP_BIN"
+fi
 ENSURE_KEYRING="$REPO_ROOT/lab/ensure-keyring.py"
 
-exec dbus-run-session -- bash -c "
-  eval \$(echo -n '' | gnome-keyring-daemon --unlock --components=secrets,pkcs11,ssh)
-  python3 '$ENSURE_KEYRING' || exit 1
-  GNOME_DESKTOP_SESSION_ID=this-is-deprecated ELECTRON_DISABLE_SANDBOX=1 $APP_BIN
-"
+exec dbus-run-session -- bash -c '
+  eval $(echo -n "" | gnome-keyring-daemon --unlock --components=secrets,pkcs11,ssh)
+  python3 "$1" || exit 1
+  shift
+  GNOME_DESKTOP_SESSION_ID=this-is-deprecated ELECTRON_DISABLE_SANDBOX=1 exec "$@"
+' bash "$ENSURE_KEYRING" "$APP_BIN" "${APP_ARGS[@]}"

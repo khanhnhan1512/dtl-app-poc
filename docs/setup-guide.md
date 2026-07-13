@@ -25,6 +25,7 @@ never installs anything itself (no sudo assumed). You need:
 | python3 | base system |
 | python3-dbus | `python3-dbus` (its own package, easy to miss) |
 | gnome-keyring, dbus-run-session | `gnome-keyring`, `dbus-x11` |
+| xdg-open (opens the OIDC login page) | `xdg-utils` (present on Ubuntu Desktop, easy to miss on a minimal or server install) |
 
 A desktop session is required for the app itself (the GUI and the keyring need a
 display). Over NoMachine, run the launch step from the desktop terminal, not an SSH
@@ -33,7 +34,8 @@ shell.
 ## Bring up the lab
 
 ```bash
-git clone <repo-url> && cd dtl-app
+git clone <repo-url>
+cd <cloned-directory>   # whatever git named it - no fixed path assumed
 bash lab/setup.sh
 ```
 
@@ -69,11 +71,15 @@ cd ../..
 
 <!-- TODO: .deb download link - pending release method -->
 
-Download `dtl-app_0.1.0_amd64.deb` and unpack it (no root needed):
+Download `dtl-app_0.1.0_amd64.deb` and unpack it (no root needed) - substitute the path to
+wherever you saved it:
 
 ```bash
-dpkg -x ~/dtl-app_0.1.0_amd64.deb ~/dtl-app-installed
+dpkg -x /path/to/dtl-app_0.1.0_amd64.deb ~/dtl-app-installed
 ```
+
+Keep `~/dtl-app-installed` as the unpack target: `lab/run-app.sh` auto-detects the packaged
+binary there, so no further configuration is needed.
 
 Unpacking with `dpkg -x` instead of installing means the Chromium sandbox helper does
 not get its setuid bit; the launch wrapper compensates with
@@ -85,14 +91,18 @@ mistakes it for a production install method.
 From the desktop terminal:
 
 ```bash
-DTL_APP_BIN="\"$HOME/dtl-app-installed/opt/DTL App/dtl-app\"" bash lab/run-app.sh
+bash lab/run-app.sh
 ```
 
-The quoting is deliberate: the install path contains a space ("DTL App"), and the value
-gets re-parsed inside the wrapper. Outer double quotes so `$HOME` expands, escaped inner
-quotes so the path survives. Copy it as is.
+`run-app.sh` auto-detects the packaged binary at `~/dtl-app-installed` and launches it -
+same command whether you are running the packaged `.deb` or from source. If you unpacked
+the `.deb` somewhere else, override the location:
 
-(Developers running from source can just do `bash lab/run-app.sh` with no override.)
+```bash
+DTL_APP_BIN="/path/to/dtl-app-installed/opt/DTL App/dtl-app" bash lab/run-app.sh
+```
+
+Normal quoting - no escaping needed, the wrapper handles the space internally.
 
 First launch: no keyring dialog of any kind should appear. The system browser opens on
 the Zitadel login page. Sign in with:

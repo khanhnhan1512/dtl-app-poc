@@ -26,7 +26,7 @@ die()  { echo "[setup] ERROR: $*" >&2; exit 1; }
 # Step 0: preflight - prerequisites are checked, never installed (no sudo assumed)
 log "Step 0/11 - preflight prerequisite check..."
 MISSING=()
-for bin in podman node npm openssl certutil pk12util curl python3 dbus-run-session gnome-keyring-daemon; do
+for bin in podman node npm openssl certutil pk12util curl python3 dbus-run-session gnome-keyring-daemon xdg-open; do
   command -v "$bin" >/dev/null 2>&1 || MISSING+=("$bin")
 done
 python3 -c "import dbus" >/dev/null 2>&1 || MISSING+=("python3-dbus (python3-dbus apt package)")
@@ -38,6 +38,7 @@ if (( ${#MISSING[@]} )); then
   echo "  certutil / pk12util                : sudo apt install libnss3-tools" >&2
   echo "  gnome-keyring-daemon / python3-dbus : sudo apt install gnome-keyring python3-dbus" >&2
   echo "  openssl / curl / python3            : base system packages" >&2
+  echo "  xdg-open                           : sudo apt install xdg-utils (opens the OIDC login page in a browser)" >&2
   die "prerequisites missing - nothing was changed. Install the above and re-run."
 fi
 log "all prerequisites present."
@@ -203,7 +204,7 @@ cat <<EOF
 [setup] Launch the app (NoMachine DESKTOP terminal - one command, no keyring dialog of any kind):
 [setup]   bash lab/run-app.sh
 [setup]   # sources lab/.runtime-env + bootstraps/unlocks the keyring silently (empty pw) - zero prompts.
-[setup]   # packaged .deb: set DTL_APP_BIN (see lab/run-app.sh header for exact quoting - the
-[setup]   #                path has a space, "DTL App"), then run lab/run-app.sh
+[setup]   # packaged .deb: auto-detected if unpacked at ~/dtl-app-installed - same command either way.
+[setup]   #                set DTL_APP_BIN only to override a non-default unpack location.
 [setup] ============================================================
 EOF

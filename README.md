@@ -27,6 +27,9 @@ allowlist. Two tiles are live in the lab (tool-1 and tool-2); the rest are place
 
 Before the launcher appears, the user signs in through our identity provider (Zitadel
 in the lab) in the system browser, using the standard Authorization Code + PKCE flow.
+Keeping the login out of the app is deliberate: the app never sees the password, and the
+user can check the address bar to confirm they are typing it into the real identity
+provider, not into a window we drew.
 Only verified accounts on our domain get in. Tokens are stored encrypted through the OS
 keyring, so closing and reopening the app does not ask for login again until the token
 expires.
@@ -68,6 +71,12 @@ Anything less than a valid signature is logged and ignored. An unreachable endpo
 never triggers a wipe, so a network outage cannot brick the fleet.
 
 ![Kill switch firing](docs/img/kill-wipe-log.png)
+
+After a wipe, the machine stays locked out. Even if the user signs in again
+through OIDC, the device certificate is gone, so the internal tools refuse the
+connection. Access does not come back until IT re-provisions the device by hand.
+
+![Locked out after a wipe](docs/img/kill-locked-out.png)
 
 ## What rolling out takes
 
