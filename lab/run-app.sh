@@ -40,12 +40,15 @@ fi
 
 # Launch target auto-detection, in priority order:
 #   1. DTL_APP_BIN, if set - explicit override (e.g. a non-default unpack location).
-#   2. The unpacked packaged .deb at ~/dtl-app-installed, if present - the normal user path.
-#   3. The dev source tree (node_modules/.bin/electron .) - the normal developer path.
+#   2. The unpacked packaged .deb at ~/dtl-app-installed, if present - the normal no-root path
+#      (dpkg -x).
+#   3. The system install at /opt/DTL App, if present - `sudo dpkg -i` lands the binary here.
+#   4. The dev source tree (node_modules/.bin/electron .) - the normal developer path.
 # APP_BIN/APP_ARGS are passed to the inner bash -c as separate positional parameters, not
 # spliced into the script text, so a path containing a space (like "DTL App") needs no manual
 # quoting from the caller - bash's own argument passing keeps it intact as one value.
 PACKAGED_BIN="$HOME/dtl-app-installed/opt/DTL App/dtl-app"
+SYSTEM_BIN="/opt/DTL App/dtl-app"
 if [[ -n "${DTL_APP_BIN:-}" ]]; then
   APP_BIN="$DTL_APP_BIN"
   APP_ARGS=()
@@ -54,6 +57,10 @@ elif [[ -x "$PACKAGED_BIN" ]]; then
   APP_BIN="$PACKAGED_BIN"
   APP_ARGS=()
   echo "[run-app] launch mode: packaged .deb - $APP_BIN"
+elif [[ -x "$SYSTEM_BIN" ]]; then
+  APP_BIN="$SYSTEM_BIN"
+  APP_ARGS=()
+  echo "[run-app] launch mode: system install - $APP_BIN"
 else
   APP_BIN="./node_modules/.bin/electron"
   APP_ARGS=(".")
