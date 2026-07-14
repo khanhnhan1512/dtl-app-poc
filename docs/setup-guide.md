@@ -30,7 +30,6 @@ bash lab/setup.sh
 
 The `lab/setup.sh` script does everything. It generates the certificate chain, loads the device certificate into the machine's certificate store, starts the internal test server, brings up the identity provider with a project and a test user already created, generates the signing key for the kill switch, and writes the settings that are specific to this machine. The first run takes a few minutes because it downloads the container images.
 
-> [!CAUTION]
 > This script starts from a clean state every time it runs. It removes any lab state already on the machine, including the operating system login keyring. This is fine on a dedicated test machine and destructive on a personal desktop.
 
 ---
@@ -60,13 +59,14 @@ cd ../..   # back to the repo root
 
 Download `dtl-app_0.1.0_amd64.deb` and unpack it. This needs no administrator rights, and it is how the demo was verified.
 
+Get the file from the [package download page](http://gitlab.intern.dtl/khanhnhan/dtl-app-poc/-/packages/1). GitLab requires you to be signed in to download it.
+
 ```bash
 dpkg -x /path/to/dtl-app_0.1.0_amd64.deb ~/dtl-app-installed
 ```
 
 Keep `~/dtl-app-installed` as the destination, because the launch script looks for the application there and needs no further configuration.
 
-> [!CAUTION]
 > Unpacking without root does not give the Chromium sandbox helper the permissions it needs, so the launch script disables the sandbox in order to start. The sandbox is a real isolation layer and a production install would keep it. This is an accepted trade-off for a demo on a dedicated test machine, and it is not how the application should be deployed for real.
 
 ---
