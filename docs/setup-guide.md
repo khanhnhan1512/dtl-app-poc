@@ -1,61 +1,41 @@
 # Setup guide
 
-How to reproduce the demo on an Ubuntu machine, from a fresh clone to a running app,
-including the kill switch. Everything here was verified end to end on a clean VM; the
-whole bring-up is two scripts and needs no manual configuration.
+This guide reproduces the demo on an Ubuntu machine, starting from a fresh clone and ending with a running application, including the kill switch. Everything described here was verified end to end on a clean machine. The whole process comes down to two scripts and requires no manual configuration.
 
-One rule up front, because it is the one thing that breaks silently if ignored:
+One rule before you begin, because it is the single thing that fails silently when ignored: **Always launch the application with `bash lab/run-app.sh` command, and never open it from the desktop menu.** The menu entry does not load the per-machine settings, so the application would sign in against the wrong client identifier and the kill switch would verify commands against the wrong key. The launch script exists precisely to supply those values.
 
-**Always launch the app with `bash lab/run-app.sh`. Never use the desktop menu entry.**
-The menu entry does not load the per-machine config (`lab/.runtime-env`), so sign-in
-fails against a wrong client ID and the kill switch verifies against a wrong key. The
-wrapper exists precisely to inject those values.
-
+---
 ## Prerequisites
 
-The setup script checks all of these up front and tells you exactly what is missing. It
-never installs anything itself (no sudo assumed). You need:
+| Tool | Package | Purpose |
+|---|---|---|
+| podman, running rootless | `podman` | Runs the containers for the test server and the identity provider |
+| Node 20 or newer, and npm | nvm is the easiest route | Signing kill commands, and building from source if you want to |
+| certutil and pk12util | `libnss3-tools` | Loading the device certificate into the machine's certificate store |
+| python3-dbus | `python3-dbus` | Preparing the keyring so the app never shows a password prompt. This is its own package and is easy to miss |
+| gnome-keyring and dbus-run-session | `gnome-keyring` and `dbus-x11` | Encrypting the login tokens through the operating system |
+| xdg-open | `xdg-utils` | Opening the login page in your browser. |
 
-| What | Ubuntu package / source |
-|---|---|
-| podman (rootless) | `podman` |
-| Node 20+ and npm | nvm recommended |
-| openssl, curl | base system |
-| certutil and pk12util | `libnss3-tools` |
-| python3 | base system |
-| python3-dbus | `python3-dbus` (its own package, easy to miss) |
-| gnome-keyring, dbus-run-session | `gnome-keyring`, `dbus-x11` |
-| xdg-open (opens the OIDC login page) | `xdg-utils` (present on Ubuntu Desktop, easy to miss on a minimal or server install) |
-
-A desktop session is required for the app itself (the GUI and the keyring need a
-display). Over NoMachine, run the launch step from the desktop terminal, not an SSH
-shell.
-
-## Bring up the lab
+---
+## Setting up the environment
 
 ```bash
-git clone <repo-url>
-cd <cloned-directory>   # whatever git named it - no fixed path assumed
+git clone git@gitlab.intern.dtl:khanhnhan/dtl-app-poc.git
+cd dtl-app-poc/
 bash lab/setup.sh
 ```
 
-`setup.sh` does the whole thing in one pass: generates the certificate chain, imports
-it into NSS, starts nginx (three test endpoints), starts Zitadel with Postgres, creates
-the OIDC project, app and test user through the API, generates the kill-switch signing
-keypair, and writes the per-machine values to `lab/.runtime-env`. Takes a couple of
-minutes on first run (container pulls).
+The `lab/setup.sh` script does everything. It generates the certificate chain, loads the device certificate into the machine's certificate store, starts the internal test server, brings up the identity provider with a project and a test user already created, generates the signing key for the kill switch, and writes the settings that are specific to this machine. The first run takes a few minutes because it downloads the container images.
 
-Fair warning: the first line of the script says it and so will we. setup.sh starts from
-a clean slate every run. It tears down any existing lab state on the machine, including
-the OS login keyring. Fine on a dedicated test box, destructive on your personal
-desktop.
+> [CAUTION]
+> This script starts from a clean state every time it runs. It removes any lab state already on the machine, including the operating system login keyring. This is fine on a dedicated test machine and destructive on a personal desktop.
 
-When it finishes it prints the curl checks below and the launch command.
-
-## Check the endpoints (optional but quick)
+---
+## Check the endpoints (optional)
 
 ```bash
 cd lab/certs
+
 curl -s --cacert ca.pem --cert client.crt --key client.key https://localhost:8443/ | grep verify=
 # -> verify=SUCCESS (tool-1 accepts this device)
 
@@ -63,70 +43,62 @@ curl -s -o /dev/null -w '%{http_code}\n' --cacert ca.pem --cert client.crt --key
 # -> 403 (tool-2 refuses this device, by design)
 
 curl -s --cacert ca.pem https://localhost:8444/
-# -> verify=NONE (the kill-switch control plane, no client cert required)
-cd ../..
+# -> verify=NONE (the kill switch control plane, no client certificate required)
+
+curl -s --cacert ca.pem https://localhost:8444/kill
+# -> a signed JSON command. If you see an HTML error page instead, the kill switch will not work
+
+cd ../..   # back to the repo root
 ```
 
-## Get the app
+---
+## Installing the application
 
-<!-- TODO: .deb download link - pending release method -->
 
-Download `dtl-app_0.1.0_amd64.deb` and unpack it (no root needed) - substitute the path to
-wherever you saved it:
+Download `dtl-app_0.1.0_amd64.deb` and unpack it. This needs no administrator rights, and it is how the demo was verified.
 
 ```bash
 dpkg -x /path/to/dtl-app_0.1.0_amd64.deb ~/dtl-app-installed
 ```
 
-Keep `~/dtl-app-installed` as the unpack target: `lab/run-app.sh` auto-detects the packaged
-binary there, so no further configuration is needed.
+Keep `~/dtl-app-installed` as the destination, because the launch script looks for the application there and needs no further configuration.
 
-Unpacking with `dpkg -x` instead of installing means the Chromium sandbox helper does
-not get its setuid bit; the launch wrapper compensates with
-`ELECTRON_DISABLE_SANDBOX=1`. Known trade-off, fine for a lab VM, documented so nobody
-mistakes it for a production install method.
+> [CAUTION]
+> Unpacking without root does not give the Chromium sandbox helper the permissions it needs, so the launch script disables the sandbox in order to start. The sandbox is a real isolation layer and a production install would keep it. This is an accepted trade-off for a demo on a dedicated test machine, and it is not how the application should be deployed for real.
 
-## Launch
+---
+## Running the application
 
-From the desktop terminal:
+Run this from the desktop terminal.
 
 ```bash
 bash lab/run-app.sh
 ```
 
-`run-app.sh` auto-detects the packaged binary at `~/dtl-app-installed` and launches it -
-same command whether you are running the packaged `.deb` or from source. If you unpacked
-the `.deb` somewhere else, override the location:
+The script finds the application on its own, whether you unpacked the package or installed it with administrator rights. If you put it somewhere unusual, you can point the script at it.
 
 ```bash
 DTL_APP_BIN="/path/to/dtl-app-installed/opt/DTL App/dtl-app" bash lab/run-app.sh
 ```
 
-Normal quoting - no escaping needed, the wrapper handles the space internally.
-
-First launch: no keyring dialog of any kind should appear. The system browser opens on
-the Zitadel login page. Sign in with:
+On the first run, your browser opens the login page, where you sign in with the test account created during setup.
 
 ```
 testuser@dtl.local / Test1234!
 ```
-
-The browser shows a small "login complete" page and the app opens into the home
-launcher.
-
 ![Sign-in](img/login.png)
 
-## What to check
+Once you sign in, the browser shows a short confirmation page and the application opens on its home screen.
 
-Walk the tiles in this order; each one demonstrates a different outcome.
+---
+## Walking through the features
 
-**Home.** Six tiles, neutral "Managed device" badge in the top bar, your user and
-device identity on the right.
+
+**The home screen.** Six tiles, a neutral `Managed device` badge in the top bar, and your account and device identity on the right.
 
 ![Home launcher](img/home-launcher.png)
 
-**tool-1: device approved.** The page loads, the badge turns green ("Device verified"),
-and the terminal logs one line pairing both identities:
+**tool-1.** The page loads and the badge turns green `Device verified`. At the same time, the terminal logs a single line that pairs the machine identity with the signed in account.
 
 ```
 [session] device=DTL-Ubuntu-Test-Device user=testuser@dtl.local
@@ -134,64 +106,49 @@ and the terminal logs one line pairing both identities:
 
 ![Device verified](img/tool1-verified.png)
 
-**The external link inside tool-1.** Click "Open external market data". The app blocks
-it locally (amber "Address not permitted" page); the request never leaves the machine
-and the badge stays green.
+**The external link inside tool-1.** Click `Open external market data`. The application blocks it locally and shows a warning page. The request never leaves the machine, and the badge stays green, because this is an address restriction rather than a device problem.
 
 ![Address not permitted](img/nav-blocked.png)
 
-**tool-2: device refused.** Same certificate, but this server does not approve this
-device: HTTP 403, red badge, "Device blocked". Back returns to the neutral home state.
+**tool-2.** The application presents the same certificate, but this server does not approve this particular device, so it returns an HTTP 403 and the badge turns red `Device blocked`.
 
 ![Device blocked](img/tool2-blocked.png)
 
-**Warm start.** Quit the app, run the same launch command again. No keyring dialog, no
-login: it goes straight to the launcher, reading the encrypted token store.
+**Restarting the application.** Quit and launch it again. No password prompt appears and you are not asked to log in, because the application reads the encrypted tokens it stored during the first sign in.
 
+---
 ## Kill switch demo
 
-With the app running, sign a fresh wipe command and put it where the control plane
-serves it:
+With the application running, sign a fresh wipe command and place it where the control plane serves it from.
 
 ```bash
 bash lab/kill/sign-command.sh DTL-Ubuntu-Test-Device "cmd-$(date +%s)" wipe 2>/dev/null > lab/kill/kill-command.json
 ```
 
-Within 30 seconds (or immediately on relaunch) the poller picks it up. The terminal
-shows the verdict, the wipe, and the app quits:
-
-```
-[kill] command_id: cmd-... | action: wipe | verdict: VALID_WIPE
-[wipe] Done. { sessionCleared: true, certDeleted: true, tokensCleared: true }
-[kill] kill complete - quitting app
-```
+The application polls every 30 seconds, so the command is picked up within half a minute. The terminal then shows the verdict, the wipe itself, and the shutdown. See the output below:
 
 ![Kill switch firing](img/kill-wipe-log.png)
 
-Relaunch to see the locked-out state: the device certificate is gone, so both tools now
-refuse the machine, and OIDC asks for a fresh login. This is the intended end state of
-a kill.
+Launch the application again to see the state a wipe leaves behind. You can still sign in, because the account is untouched, but the device certificate is gone, so the internal tools no longer accept this machine. That is the intended end state.
 
-The command id must be unique (the `$(date +%s)` above handles that): the app keeps a
-ledger of executed commands and refuses replays, and it also rejects anything older
-than 24 hours or aimed at a different device.
+Note that each command needs its own identifier, which is what `$(date +%s)` provides above. The application keeps a record of the commands it has already carried out and refuses to run the same one twice. It also ignores anything issued more than 24 hours ago, or aimed at a different machine.
 
-### Restore the machine
+### Bringing the machine back
 
 ```bash
 bash lab/reprovision-cert.sh
 bash lab/kill/sign-command.sh DTL-Ubuntu-Test-Device "cmd-$(date +%s)" none 2>/dev/null > lab/kill/kill-command.json
 ```
 
-Then launch and log in again. Re-provisioning is manual on purpose: a signed command
-can take access away, but giving it back requires a human with the provisioning script.
+The first command issues the machine a new certificate. The second replaces the wipe command with a harmless one, so the control plane is no longer serving an instruction to wipe. Launch the application and sign in again, and the tools accept the machine as before.
 
+Recovery is manual by design so restoring it requires someone with access to the provisioning script.
+
+---
 ## Tear down
 
 ```bash
 bash lab/teardown.sh
 ```
 
-Removes everything the lab created (containers, volumes, certificates, tokens, the
-keyring, generated keys) and leaves the prerequisites alone. Running `setup.sh` again
-after a teardown brings the whole thing back; the two are designed to cycle.
+This removes everything the lab created, meaning the containers, the certificates, the stored tokens, the login keyring, and the generated keys. It leaves the prerequisites you installed earlier untouched, so the machine is back to the state it was in before you started. Running `setup.sh` again brings the whole environment back, and the two scripts are designed to be run in that cycle as often as you like.

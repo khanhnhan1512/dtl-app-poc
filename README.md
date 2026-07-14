@@ -1,6 +1,6 @@
 # DTL App (Proof of Concept)
 
-DTL App replaces standard browsers to provide a secure, locked-down gateway for accessing DTL's internal tools. Designed to enforce strict access management and corporate data protection, it requires concurrent validation of both the physical device and the authenticated employee, while integrating a remote kill-switch to immediately wipe local corporate credentials if the device is compromised.
+DTL App replaces standard browsers to provide a secure, locked-down gateway for accessing DTL's internal tools. Designed to enforce strict access management and corporate data protection, it requires independently validation of both the physical device and the authenticated employee, while integrating a remote kill-switch to immediately wipe local corporate credentials if the device is compromised.
 
 The main goal of this project was to show we can build a browser we fully control.
 
@@ -14,7 +14,7 @@ The application is fully customized as "DTL App" across the window title and sys
 
 ### 2. Custom Authentication (OIDC)
 
-The application locks access until the user logs in through our identity provider `Zitadel` (configured for the test environment). The login flow opens in the system browser using the standard OIDC protocol and only allows accounts from the corporate domain (`@dtl.local`). 
+The application locks access until the user logs in through our identity provider `Zitadel` (configured for the test environment). The login flow opens in the system browser using the standard OIDC protocol and only allows accounts from the corporate domain (`@dtl.local` in the lab). 
 
 For testing purposes, a default account has been pre-created:
 * **Username:** `testuser@dtl.local`
@@ -45,7 +45,6 @@ The browser presents this unique certificate exclusively to allowlisted internal
 
   ![Address not permitted](docs/img/nav-blocked.png)
 
----
 
 **Technical note (PoC Scope):** Device certificates in the lab are issued with an 825-day lifespan, but we have not built anything to handle one lapsing. An expired certificate fails at the TLS handshake, before any HTTP response exists, so it never reaches the access-denied page that a refused (403) or missing (400) certificate goes through. It lands instead in the app's load-failure path, which today only logs to the console: the user would see a blank view with the badge unchanged and no explanation. Production needs a renewal policy and a proper message on that failure path.
 
@@ -65,7 +64,9 @@ Once a valid wipe command is received, the app destroys its own access: session 
 
   ![Locked out after a wipe](docs/img/kill-locked-out.png)
 
-The switch also fails safe, in both directions. A command that does not verify is logged and ignored rather than acted on. And if the endpoint cannot be reached, the app does nothing and keeps running.
+The switch also fails safe, in both directions. A command that does not verify is logged and ignored rather than acted on. And if the endpoint cannot be reached, the app does nothing and keeps running, so the user can still log in and use the internal tools. A wipe only happens when a valid signed command actually arrives, never because one failed to.
+
+---
 
 ## Path to production
 
@@ -108,7 +109,7 @@ The one item worth flagging now is client certificates on iOS. Apple forces appl
 | Linux (Debian, Ubuntu) | [`dtl-app_0.1.0_amd64.deb`](TODO) | Available |
 | Windows | `.exe` installer | Coming soon |
 | macOS | `.dmg` | Coming soon |
-| iOS, Android | TBD | Coming soon |
+| iOS, Android | TBD | TBD |
 
 
 ## Trying it yourself
