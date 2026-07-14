@@ -11,7 +11,10 @@ One rule before you begin, because it is the single thing that fails silently wh
 |---|---|---|
 | podman, running rootless | `podman` | Runs the containers for the test server and the identity provider |
 | Node 20 or newer, and npm | nvm is the easiest route | Signing kill commands, and building from source if you want to |
+| openssl | `openssl` | Generating the certificate chain, meaning the CA, the server certificate, and the device certificate |
+| curl | `curl` | Waiting for the identity provider to finish starting, and checking the test server's endpoints |
 | certutil and pk12util | `libnss3-tools` | Loading the device certificate into the machine's certificate store |
+| python3 | `python3` | Running the kill switch signing script, and reading the identity provider's setup output |
 | python3-dbus | `python3-dbus` | Preparing the keyring so the app never shows a password prompt. This is its own package and is easy to miss |
 | gnome-keyring and dbus-run-session | `gnome-keyring` and `dbus-x11` | Encrypting the login tokens through the operating system |
 | xdg-open | `xdg-utils` | Opening the login page in your browser. |
@@ -27,7 +30,7 @@ bash lab/setup.sh
 
 The `lab/setup.sh` script does everything. It generates the certificate chain, loads the device certificate into the machine's certificate store, starts the internal test server, brings up the identity provider with a project and a test user already created, generates the signing key for the kill switch, and writes the settings that are specific to this machine. The first run takes a few minutes because it downloads the container images.
 
-> [CAUTION]
+> [!CAUTION]
 > This script starts from a clean state every time it runs. It removes any lab state already on the machine, including the operating system login keyring. This is fine on a dedicated test machine and destructive on a personal desktop.
 
 ---
@@ -63,7 +66,7 @@ dpkg -x /path/to/dtl-app_0.1.0_amd64.deb ~/dtl-app-installed
 
 Keep `~/dtl-app-installed` as the destination, because the launch script looks for the application there and needs no further configuration.
 
-> [CAUTION]
+> [!CAUTION]
 > Unpacking without root does not give the Chromium sandbox helper the permissions it needs, so the launch script disables the sandbox in order to start. The sandbox is a real isolation layer and a production install would keep it. This is an accepted trade-off for a demo on a dedicated test machine, and it is not how the application should be deployed for real.
 
 ---
@@ -125,7 +128,7 @@ With the application running, sign a fresh wipe command and place it where the c
 bash lab/kill/sign-command.sh DTL-Ubuntu-Test-Device "cmd-$(date +%s)" wipe 2>/dev/null > lab/kill/kill-command.json
 ```
 
-The application polls every 30 seconds, so the command is picked up within half a minute. The terminal then shows the verdict, the wipe itself, and the shutdown. See the output below:
+The application polls every 30 seconds, so the command is picked up within half a minute. The terminal then shows the verdict, the wipe itself, and the shutdown:
 
 ![Kill switch firing](img/kill-wipe-log.png)
 
@@ -142,7 +145,7 @@ bash lab/kill/sign-command.sh DTL-Ubuntu-Test-Device "cmd-$(date +%s)" none 2>/d
 
 The first command issues the machine a new certificate. The second replaces the wipe command with a harmless one, so the control plane is no longer serving an instruction to wipe. Launch the application and sign in again, and the tools accept the machine as before.
 
-Recovery is manual by design so restoring it requires someone with access to the provisioning script.
+Recovery is manual by design. Revoking a machine can be done remotely, but restoring it requires someone with access to the provisioning script.
 
 ---
 ## Tear down
