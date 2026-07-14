@@ -1,154 +1,107 @@
-# DTL App
+# DTL App (Proof of Concept)
 
-A managed browser for DTL's internal tools. Proof of concept, currently Linux only.
+DTL App replaces standard browsers to provide a secure, locked-down gateway for accessing DTL's internal tools. Designed to enforce strict access management and corporate data protection, it requires concurrent validation of both the physical device and the authenticated employee, while integrating a remote kill-switch to immediately wipe local corporate credentials if the device is compromised.
 
-The brief was to show we can build a browser we fully control: what it shows, what it
-can reach, how it proves which machine and which person is using it, and how we shut it
-down remotely when a device is lost or leaves the fleet. All five features below work
-today in a packaged .deb, verified end to end on a clean Ubuntu VM.
+The main goal of this project was to show we can build a browser we fully control.
 
 ## Features
 
-### 1. Custom branding
+### 1. Custom Branding & Home Launcher
 
-The app ships as "DTL App" with our own name and logo at the OS level: window title,
-application menu, package metadata. No Chromium or Electron branding anywhere the user
-looks.
-
-### 2. Home launcher
-
-The app opens into a fixed home page listing internal tools as tiles. There is no
-address bar, no tabs, no devtools, and no way to navigate anywhere that is not on the
-allowlist. Two tiles are live in the lab (tool-1 and tool-2); the rest are placeholders.
+The application is fully customized as "DTL App" across the window title and system menus. It opens directly into a locked home page that restricts navigation strictly to approved corporate tools. Currently, two active tools (`tool-1` and `tool-2`) are functional for lab testing, while the rest serve as placeholders.
 
 ![Home launcher](docs/img/home-launcher.png)
 
-### 3. User sign-in (OIDC)
+### 2. Custom Authentication (OIDC)
 
-Before the launcher appears, the user signs in through our identity provider (Zitadel
-in the lab) in the system browser, using the standard Authorization Code + PKCE flow.
-Keeping the login out of the app is deliberate: the app never sees the password, and the
-user can check the address bar to confirm they are typing it into the real identity
-provider, not into a window we drew.
-Only verified accounts on our domain get in. Tokens are stored encrypted through the OS
-keyring, so closing and reopening the app does not ask for login again until the token
-expires.
+The application locks access until the user logs in through our identity provider `Zitadel` (configured for the test environment). The login flow opens in the system browser using the standard OIDC protocol and only allows accounts from the corporate domain (`@dtl.local`). 
+
+For testing purposes, a default account has been pre-created:
+* **Username:** `testuser@dtl.local`
+* **Password:** `Test1234!`
+
+Once logged in, the tokens are encrypted and stored directly inside the operating system's keyring. This keeps the session active so users do not need to log in again every time the app restarts.
 
 ![Sign-in](docs/img/login.png)
+### 3. Device Identity (mTLS)
 
-### 4. Device identity (mTLS)
+To demonstrate our capability to fully customize client-side verification, the application enforces a unique cryptographic identity for every machine. Each machine is provisioned with a distinct client certificate bound to a specific expiration date, allowing the infrastructure to identify and verify the exact client machine.
 
-Each machine holds its own client certificate, and the app presents it only to
-allowlisted internal hosts. The server then decides per device. The lab demonstrates
-all three outcomes:
+Crucially, the certificate resides within the OS certificate store rather than inside the application bundle. This ensures that reinstalling the app preserves the machine's identity, while copying the application binary to another device will not clone its access rights.
 
-- tool-1 approves this device: the page loads and the badge turns green,
-  "Device verified".
-- tool-2 gets the same certificate but does not approve this device: HTTP 403, red
-  badge, "Device blocked".
-- A link pointing outside the allowlist never leaves the app at all. It is blocked
-  locally with an amber page, and the device identity is untouched.
+In the lab, the certificate is issued by a self-signed CA through a provisioning script and loaded into the machine's NSS store. Provisioning is deliberately separate from installing the app so the app never generates its own identity, it only presents one that was granted to the machine.
 
-Every successful tool load also logs which device and which user were behind it, on one
-line. That pairing (machine identity from mTLS, person identity from OIDC) is the core
-of the model: both must pass independently.
+The browser presents this unique certificate exclusively to allowlisted internal hosts, which evaluate access permissions on a per-device basis. The lab environment demonstrates three operational outcomes:
 
-![Device verified](docs/img/tool1-verified.png)
-![Device blocked](docs/img/tool2-blocked.png)
-![Address not permitted](docs/img/nav-blocked.png)
+* **Approved Device (tool-1):** The server validates the certificate, the page loads successfully, and the badge turns green `Device verified`.
 
-### 5. Remote kill switch
+  ![Device verified](docs/img/tool1-verified.png)
 
-The app polls a fixed HTTPS endpoint every 30 seconds. The endpoint serves a small JSON
-command signed with an Ed25519 key. If the signature verifies, the command names this
-device, it is fresh (under 24 hours old) and it has not been executed before, the app
-wipes itself: session data, the device certificate and the stored tokens, then quits.
-On the next launch there is nothing left to authenticate with. The machine stays locked
-out until IT re-provisions it by hand, which is deliberate: a signed command can revoke
-access, but granting access back requires a human.
+* **Blocked Device (tool-2):** The server detects the certificate but explicitly denies this specific device instance, returning an HTTP 403 error and a red badge `Device blocked`.
 
-Anything less than a valid signature is logged and ignored. An unreachable endpoint
-never triggers a wipe, so a network outage cannot brick the fleet.
+  ![Device blocked](docs/img/tool2-blocked.png)
 
-![Kill switch firing](docs/img/kill-wipe-log.png)
+* **Unlisted Navigation:** Any link pointing outside the corporate allowlist is blocked locally via an amber warning page. The request never leaves the machine, ensuring the device identity is never exposed.
 
-After a wipe, the machine stays locked out. Even if the user signs in again
-through OIDC, the device certificate is gone, so the internal tools refuse the
-connection. Access does not come back until IT re-provisions the device by hand.
+  ![Address not permitted](docs/img/nav-blocked.png)
 
-![Locked out after a wipe](docs/img/kill-locked-out.png)
+---
 
-## What rolling out takes
+**Technical note (PoC Scope):** Device certificates in the lab are issued with an 825-day lifespan, but we have not built anything to handle one lapsing. An expired certificate fails at the TLS handshake, before any HTTP response exists, so it never reaches the access-denied page that a refused (403) or missing (400) certificate goes through. It lands instead in the app's load-failure path, which today only logs to the console: the user would see a blank view with the badge unchanged and no explanation. Production needs a renewal policy and a proper message on that failure path.
 
-The short version: Linux needs production plumbing rather than new code, Windows is
-incremental work on the same codebase, macOS is the same plus one hurdle we have not
-crossed before, and mobile is a separate project.
+### 4. Remote Kill Switch
+
+To demonstrate remote revocation without an Mobile Device Management (MDM), the application polls a fixed HTTPS control-plane endpoint every 30 seconds. In the lab, this endpoint is served by the local nginx instance at `https://localhost:8444/kill`, which returns a small JSON command signed with an Ed25519 key.
+
+The app executes a wipe only when every check passes: the signature must verify against the trusted public key, the command must name this specific device, it must be fresh (issued within the last 24 hours), and it must not have been executed before. A ledger of executed command IDs prevents an old command from being replayed.
+
+Once a valid wipe command is received, the app destroys its own access: session data, the device certificate, and the encrypted tokens. It then quits. The demonstration produces two observable outcomes:
+
+* **Execution:** The terminal logs the verdict, the wipe result, and the shutdown. There is nothing left on the machine to authenticate with.
+
+  ![Kill switch firing](docs/img/kill-wipe-log.png)
+
+* **Lockout:** On the next launch, the user can still sign in through OIDC, but the device certificate is gone. The internal tools reject the machine, and access only returns once the certificate is re-provisioned manually. The asymmetry here is deliberate. Revoking access is remote and instant while restoring it is not. A signed command can lock a machine out from anywhere, but bringing it back requires someone to re-provision the certificate on that machine.
+
+  ![Locked out after a wipe](docs/img/kill-locked-out.png)
+
+The switch also fails safe, in both directions. A command that does not verify is logged and ignored rather than acted on. And if the endpoint cannot be reached, the app does nothing and keeps running.
+
+## Path to production
 
 ### Linux
 
-The app is done; the surroundings are not. What the PoC fakes locally, a rollout needs
-for real:
+The application itself is finished. What is not finished is everything around it, because the lab fakes those parts locally. A real rollout needs each of them for real:
 
-- Certificate provisioning. The lab self-signs a throwaway CA and issues the device
-  certificate with a script. A rollout needs a real internal CA and a per-machine
-  issuing process owned by IT, plus a revocation story on the server side.
-- The identity provider. The lab runs Zitadel on the test machine itself. Production
-  points the app at a centrally hosted IdP instead; the app only needs its issuer URL
-  and client ID, which are already injected at launch rather than baked into the build.
-- The kill switch backend. Today the "control plane" is a static signed file on a local
-  nginx. A rollout needs a real endpoint IT can push signed commands to, and the
-  signing key moves to wherever IT keeps such keys. The command format and the app side
-  stay as they are.
-- Packaging. The .deb installs and runs, but the PoC launches through a wrapper script
-  that injects per-machine config, and the lab install skips the Chromium sandbox
-  (documented, fine for a VM, not for real desktops). A rollout wants proper installs
-  with config delivered by whatever manages our Linux machines.
+* **Issuing certificates to machines.** The lab uses a throwaway CA and a manual script to provision device certificates. A production rollout requires a real internal CA and a defined lifecycle strategy: establishing who provisions new machines, when it occurs, and how certificates are revoked for lost devices or offboarded employees. This is a company-wide operational framework rather than application code.
 
-None of this touches the five features. It is deployment work, and most of it (CA, IdP,
-kill backend) is shared groundwork that Windows and macOS then reuse.
+* **Enforcing mTLS on internal services.** Our internal services do not request a client certificate today, so the lab stands up an nginx server that does. A real rollout requires configuring each internal web application to trust our CA and handle device-level authorization. This configuration takes place on the infrastructure side rather than inside the browser app, scaling with the number of integrated applications.
+
+* **Moving to a central identity provider.** The lab runs its own login server on the test machine. In production the application would point at whatever identity provider the company already uses. The application only needs the address of that provider and an identifier for itself, and both of those are already supplied at launch rather than compiled into the build, so this is a configuration change rather than a code change.
+
+* **Building a real control plane for the kill switch.** Today the kill command is a static signed file served by the local nginx. A rollout needs a real service that someone can push a signed command to, and the signing key needs to live wherever the company keeps keys of that kind. The command format and the application side of it stay exactly as they are.
+
+* **Packaging and installation.** The package installs and runs, but the PoC launches through a wrapper script that supplies the per-machine settings, and the lab installation skips the Chromium sandbox, which is acceptable on a test machine and not acceptable on a real desktop. A rollout wants a normal installation, with settings delivered by whatever manages our Linux machines.
 
 ### Windows
 
-The known path. Everything in the Linux list above applies here too; what follows is
-the Windows-specific part.
+This is the known path. Everything in the Linux list above still applies, and what follows is only what is specific to Windows.
 
-The app code itself is portable: Electron builds Windows binaries from the same source,
-and electron-builder already produces .exe installers with a config change. The real
-work is certificate provisioning. Linux uses the NSS database; Windows uses the OS
-certificate store, which Electron reads natively, so the in-app code stays as is and
-the provisioning scripts change from certutil to PowerShell. Token encryption actually
-gets simpler: safeStorage uses DPAPI on Windows out of the box, so the whole keyring
-bootstrap we needed on Linux disappears. The lab scripts are bash and would need
-PowerShell equivalents. We already have Windows VMs, so this can be tested as soon as
-it is built.
+The application code is portable, because Electron builds Windows binaries from the same source and our packaging tool already produces Windows installers with a configuration change. The real work is again in certificates. Linux stores them in a database called NSS, while Windows stores them in its own certificate store, which Electron reads natively, so the code inside the application stays as it is and only the provisioning scripts change from Linux tooling to PowerShell. Token storage actually gets easier, because Windows encrypts them through its own built-in mechanism, so the keyring setup we needed on Linux disappears entirely. The lab scripts are written in bash and would need PowerShell equivalents. We already have Windows machines available, so this can be tested as soon as it is built.
 
 ### macOS
 
-Mostly known, one real unknown.
+Mostly known, with one real unknown.
 
-Portability and certificate handling mirror Windows: packaging becomes .dmg,
-certificates go to the macOS Keychain (imported via the security CLI), and both the
-client cert lookup and safeStorage use Keychain with no extra bootstrap. The unknown is
-distribution. Modern macOS refuses to run unsigned apps, so shipping even an internal
-.dmg means an Apple Developer account, code signing certificates and Apple's
-notarization step. We have not done this before. Treat any macOS estimate as soft until
-we have run notarization once. We would also need a macOS machine for building and
-testing, which is a sysadmin request.
+Portability and certificate handling look much like Windows. Packaging becomes a disk image, certificates go into the macOS Keychain, and both the certificate lookup and the token storage use that same Keychain with no extra setup. The unknown is distribution. Modern macOS refuses to run applications that Apple has not approved, so shipping even an internal build means an Apple developer account, signing certificates, and Apple's notarization step. We have not done this before, so any estimate for macOS should be treated as soft until we have been through notarization once. We would also need a macOS machine to build and test on, which is a request for the systems team.
 
 ### iOS and Android
 
-Not a port. Electron does not run on mobile, so this is a second codebase, native or
-something like React Native, sharing specifications rather than code.
+Mobile is not a port. Electron does not run on phones, so this would be a second codebase, either native or something like React Native, and it would share specifications with the desktop application rather than share code.
 
-What transfers: the kill-command format is deliberately language neutral, so a mobile
-client verifies the same Ed25519 signature over the same bytes. The OIDC flow is
-standard AppAuth territory on both platforms. The allowlist and badge concepts carry
-over as product design.
+Some things carry across. The kill command format was designed to be independent of any programming language, so a mobile client can verify the same signature over the same bytes. The login flow is standard on both platforms and there are well-established libraries for it. The allowlist and the badge that tells the user whether their device is trusted carry across as product design rather than as code.
 
-What does not: all the Electron and JavaScript code. And client-certificate handling
-inside iOS's WKWebView is possible but far more constrained than desktop Chromium. We
-would want a small spike there before promising anything; it is the single hardest item
-on the mobile list.
+Other things do not carry across at all, starting with every line of the Electron and JavaScript code. More importantly, handling client certificates inside the web view that iOS forces applications to use is possible but far more constrained than it is on desktop. We would want a small experiment there before promising anything, because it is the hardest single item on the mobile list.
 
 ## Seeing it run
 
