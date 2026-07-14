@@ -71,47 +71,48 @@ The switch also fails safe, in both directions. A command that does not verify i
 
 ### Linux
 
-The application itself is finished. What is not finished is everything around it, because the lab fakes those parts locally. A real rollout needs each of them for real:
+The application itself is finished. What is not finished is everything around it, because the lab fakes those parts locally. The app will need each of them in production:
 
 * **Issuing certificates to machines.** The lab uses a throwaway CA and a manual script to provision device certificates. A production rollout requires a real internal CA and a defined lifecycle strategy: establishing who provisions new machines, when it occurs, and how certificates are revoked for lost devices or offboarded employees. This is a company-wide operational framework rather than application code.
 
-* **Enforcing mTLS on internal services.** Our internal services do not request a client certificate today, so the lab stands up an nginx server that does. A real rollout requires configuring each internal web application to trust our CA and handle device-level authorization. This configuration takes place on the infrastructure side rather than inside the browser app, scaling with the number of integrated applications.
+* **Enforcing mTLS on internal services.** Our internal services do not request a client certificate today, so the lab stands up an nginx server that does. In production, the app requires configuring each internal web application to trust our CA and handle device-level authorization. This configuration takes place on the infrastructure side rather than inside the browser app, scaling with the number of integrated applications.
 
-* **Moving to a central identity provider.** The lab runs its own login server on the test machine. In production the application would point at whatever identity provider the company already uses. The application only needs the address of that provider and an identifier for itself, and both of those are already supplied at launch rather than compiled into the build, so this is a configuration change rather than a code change.
+* **Central Identity Provider (IdP) Integration.** The lab runs its own login server on the test machine. In production the application would point at whatever identity provider the company already uses. The app only needs the address of that provider and an identifier for itself.
 
-* **Building a real control plane for the kill switch.** Today the kill command is a static signed file served by the local nginx. A rollout needs a real service that someone can push a signed command to, and the signing key needs to live wherever the company keeps keys of that kind. The command format and the application side of it stay exactly as they are.
+* **Building a real control plane for the kill switch.** The lab currently serves the kill command as a static signed file via Nginx. Production requires a dedicated service to issue signed commands, with the signing key securely hosted within the company’s standard key management infrastructure. The underlying command format and client-side implementation remain unchanged.
 
-* **Packaging and installation.** The package installs and runs, but the PoC launches through a wrapper script that supplies the per-machine settings, and the lab installation skips the Chromium sandbox, which is acceptable on a test machine and not acceptable on a real desktop. A rollout wants a normal installation, with settings delivered by whatever manages our Linux machines.
+**Delivering per-machine settings.** The application needs a few values that differ from machine to machine, such as the address of the identity provider and the key it trusts for kill commands. In the lab a wrapper script supplies them at launch, which is why for the demo we should not open the app from the desktop menu, because the menu entry does not go through that script. A rollout needs those settings delivered properly, through a system configuration file or through whatever tool manages our Linux machines, so that the application works no matter how it is started.
 
 ### Windows
 
-This is the known path. Everything in the Linux list above still applies, and what follows is only what is specific to Windows.
+Everything in the Linux list still applies, and what follows is only what is specific to Windows.
 
-The application code is portable, because Electron builds Windows binaries from the same source and our packaging tool already produces Windows installers with a configuration change. The real work is again in certificates. Linux stores them in a database called NSS, while Windows stores them in its own certificate store, which Electron reads natively, so the code inside the application stays as it is and only the provisioning scripts change from Linux tooling to PowerShell. Token storage actually gets easier, because Windows encrypts them through its own built-in mechanism, so the keyring setup we needed on Linux disappears entirely. The lab scripts are written in bash and would need PowerShell equivalents. We already have Windows machines available, so this can be tested as soon as it is built.
+The application code carries over unchanged, because Electron builds Windows binaries from the same source and our packaging tool already produces Windows installers. What changes is the plumbing around certificates. Windows keeps them in its own certificate store, which Electron reads natively, so only the provisioning scripts need rewriting from bash into PowerShell. Token storage actually gets easier, because Windows encrypts them through a built-in mechanism so we don't need the keyring setup on Linux.
 
 ### macOS
-
-Mostly known, with one real unknown.
 
 Portability and certificate handling look much like Windows. Packaging becomes a disk image, certificates go into the macOS Keychain, and both the certificate lookup and the token storage use that same Keychain with no extra setup. The unknown is distribution. Modern macOS refuses to run applications that Apple has not approved, so shipping even an internal build means an Apple developer account, signing certificates, and Apple's notarization step. We have not done this before, so any estimate for macOS should be treated as soft until we have been through notarization once. We would also need a macOS machine to build and test on, which is a request for the systems team.
 
 ### iOS and Android
 
-Mobile is not a port. Electron does not run on phones, so this would be a second codebase, either native or something like React Native, and it would share specifications with the desktop application rather than share code.
+Mobile is not a port. Electron does not run on phones, so this would be a second codebase that shares specifications with the desktop application rather than sharing code.
 
-Some things carry across. The kill command format was designed to be independent of any programming language, so a mobile client can verify the same signature over the same bytes. The login flow is standard on both platforms and there are well-established libraries for it. The allowlist and the badge that tells the user whether their device is trusted carry across as product design rather than as code.
+What carries across is design rather than implementation. The kill command format was deliberately made independent of any programming language, so a mobile client can verify the same signature, and the login flow is standard on both platforms.
 
-Other things do not carry across at all, starting with every line of the Electron and JavaScript code. More importantly, handling client certificates inside the web view that iOS forces applications to use is possible but far more constrained than it is on desktop. We would want a small experiment there before promising anything, because it is the hardest single item on the mobile list.
+The one item worth flagging now is client certificates on iOS. Apple forces applications through its own web view, where certificate handling is possible but far more constrained than on desktop. We would want a small experiment there before committing to anything, because it is the hardest part of the mobile development process.
 
-## Seeing it run
+## Downloads
 
-Everything needed to reproduce the demo on a fresh Ubuntu machine is in
-[docs/setup-guide.md](docs/setup-guide.md). One script stands up the whole lab
-(certificates, the mTLS endpoints, the identity provider with a seeded test user), and
-one script launches the app. No manual configuration.
+| Platform | Package | Status |
+|---|---|---|
+| Linux (Debian, Ubuntu) | [`dtl-app_0.1.0_amd64.deb`](TODO) | Available |
+| Windows | `.exe` installer | Coming soon |
+| macOS | `.dmg` | Coming soon |
+| iOS, Android | TBD | Coming soon |
 
-### Download
 
-<!-- TODO: .deb download link - pending release method -->
-The packaged build is `dtl-app_0.1.0_amd64.deb`. Download location: to be added once we
-settle on the release channel.
+## Trying it yourself
+
+The demo runs on any Ubuntu machine that meets the prerequisites, and it needs no manual configuration. One script brings up the whole lab, meaning the certificates, the internal endpoints it protects, and the identity provider with a test user already seeded. A second script launches the application. From there you can walk through every feature above, including the kill switch and the lockout that follows it.
+
+Step by step instructions are in [docs/setup-guide.md](docs/setup-guide.md).
