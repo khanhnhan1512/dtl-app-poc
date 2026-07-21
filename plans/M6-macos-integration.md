@@ -44,7 +44,10 @@ he runs them today from the `.deb`. Two halves, same shape as M4:
    `add-trusted-cert`) that require a real GUI session and a typed password (see verified inputs).
    Those two are the only exceptions — documented up front, not discovered mid-setup, and **not**
    joined by a third manual step to launch Postgres.app's GUI (see Step 1 and D-M6-8: Postgres is
-   driven entirely through its bundled CLI binaries, the GUI app itself is never opened).
+   driven entirely through its bundled CLI binaries, the GUI app itself is never opened). **The `.dmg`
+   must already be installed before `security import` runs** — confirmed empirically that `-T`
+   requires its target binary to exist, not just be planned (see Step 1 and D-M6-10) — so the setup
+   guide's documented order is app-install first, lab setup second, not the reverse.
 2. All five core features work end-to-end on macOS through the packaged `.dmg`, mirroring M4's DoD:
    branding/custom homepage (M1), OIDC login (M2), mTLS device cert presented + accepted (M0), the
    kill switch wipes and locks the device out (M3), and the two-layer session compose (M4).
@@ -343,6 +346,36 @@ CLAUDE.md                 ← MODIFY: Scope/Platforms lines (Step 9)
      attempting them itself, per the verified GUI-session requirement. **Nothing else in this script
      requires operator interaction** — Postgres is CLI-driven per step 5, so there is no third manual
      "launch Postgres.app" step, resolving the contradiction flagged in review.
+
+  **Operational ordering constraint, confirmed empirically, not assumed (this is why Step 6 below
+  reorders "install the app" ahead of "run the lab setup"):** `security import -T <path>` requires
+  the target binary to **already exist** at import time — it does not accept a not-yet-installed
+  app and defer the check. Confirmed directly on the mac VM with a clean side-by-side comparison:
+
+  ```
+  # -T pointing at a path that does not exist:
+  $ security import client.p12 -k login.keychain-db -P ... -T "/path/does/not/exist"
+  security: SecTrustedApplicationCreateFromPath ...: UNIX[No such file or directory]
+  # fails immediately, at path validation — before the interactive-session check is even reached
+
+  # -T pointing at the real, already-built app:
+  $ security import client.p12 -k login.keychain-db -P ... -T "<real app path>"
+  security: SecKeychainItemImport: User interaction is not allowed.
+  # fails later, at the actual import step (needs a GUI session, as already known) - the path itself
+  # validated fine
+  ```
+
+  This is a hard failure, not a soft warning — a not-yet-installed app is not a viable `-T` target.
+  **`lab/setup-macos.sh`'s printed `security import` command must reference the app's real,
+  already-installed path** (`/Applications/DTL App.app/Contents/MacOS/DTL App` — the standard
+  post-`.dmg`-install location, not a dev build path that might move). Concretely, this means: the
+  script should check whether that path exists before printing the two commands, and print a clear
+  "install the app first, then re-run this script (or run these two commands directly, substituting
+  the same generated cert paths)" message if it doesn't — rather than handing over a command that
+  will fail with a confusing `SecTrustedApplicationCreateFromPath` error the operator has no context
+  for. This is an operational-sequencing dependency on Step 5 (packaging) even though Step 5 is
+  documented later in this plan for incremental-build reasons — see Step 6 for the corrected
+  real-world order.
 - **Verify:** `curl` the three ports with/without the client cert, matching the acceptance-criteria
   table above; confirm Zitadel discovery matches `config.js`'s issuer (same assertion `setup.sh`
   already makes); confirm `lab/.runtime-env` is written; **run `setup-macos.sh` twice in a row** and
@@ -382,14 +415,34 @@ CLAUDE.md                 ← MODIFY: Scope/Platforms lines (Step 9)
   real leftover identity from the cert-provisioning smoke test, over plain SSH — exit 0, both the
   certificate and its private key confirmed gone independently afterward
   (`security find-certificate` / `security find-key` both returned "could not be found"), and —
-  notably different from `security import` — **no GUI-session requirement at all**, ran cleanly with
-  no prompt. `wipe()`'s existing `runCertutil()`-style helper pattern (spawn, capture stderr, reject
-  on non-zero exit) carries over directly for the `security` invocation.
-- **Verify:** repeat the same two-path test already run on Linux for the `da457b0` fix (success
-  path: real cert+key in Keychain, real `tokens.enc`, confirm `[wipe] Done. { sessionCleared: true,
-  certDeleted: true, tokensCleared: true }` byte-for-byte identical to the Linux log line; failure
-  path: cert already absent, confirm `certDeleted: false` and `tokens.enc` still gets cleared). The
-  log line shape must not change on either platform — `kill-wipe-log.png` depends on it.
+  notably different from `security import` — ran cleanly over SSH with no
+  `"User interaction is not allowed"` error. `wipe()`'s existing `runCertutil()`-style helper pattern
+  (spawn, capture stderr, reject on non-zero exit) carries over directly for the `security`
+  invocation.
+
+  **This SSH evidence is necessary but not sufficient — it does not by itself prove `wipe()` will
+  run unattended when it matters.** `wipe()` spawns `security delete-identity` as a child process of
+  the running Electron app, not from a terminal. An SSH session can't display a Keychain
+  authorization dialog at all, so "no prompt appeared over SSH" is consistent with two different
+  realities: either the operation genuinely needs no authorization (what the evidence suggests), or
+  it does need authorization and SSH's inability to show a prompt just failed differently than
+  expected. On Linux, `certutil -F` runs silently with no such ambiguity — this is a macOS-only
+  failure mode, and if it goes the wrong way the consequence is severe: the kill switch stalls on an
+  authorization dialog, and an operator who clicks Cancel (or one who never sees the machine, since
+  this is a *remote* kill switch) defeats it entirely.
+- **Verify — two separate things, not one test covering both:**
+  1. **The two-path result-accuracy test**, same as Linux's `da457b0` fix: success path (real
+     cert+key in Keychain, real `tokens.enc`, confirm `[wipe] Done. { sessionCleared: true,
+     certDeleted: true, tokensCleared: true }` byte-for-byte identical to the Linux log line);
+     failure path (cert already absent, confirm `certDeleted: false` and `tokens.enc` still gets
+     cleared). The log line shape must not change on either platform — `kill-wipe-log.png` depends
+     on it.
+  2. **A separate, explicitly named check: "wipe completes fully unattended, no Keychain
+     authorization prompt appears, when triggered as a child process of the running packaged app."**
+     Not inferred from (1) or from the SSH evidence above — observed directly, over VNC, by actually
+     triggering a kill-switch wipe against the running `.app` (not `electron .`, not a terminal
+     invocation) and watching whether a dialog appears. This is the check that actually answers the
+     question raised in review; passing (1) alone does not.
 
 ### Step 4 — `lab/run-app-macos.sh`
 
@@ -418,9 +471,17 @@ CLAUDE.md                 ← MODIFY: Scope/Platforms lines (Step 9)
 
 - **Files:** `docs/setup-guide-macos.md` *(new)*.
 - **What it does:** mirrors `docs/setup-guide.md`'s shape (prerequisites table, setup steps, launch
-  instructions) with macOS specifics folded in explicitly, not left implicit:
-  - The two interactive `security` commands, with a note that they need a real login session (not
-    SSH) and to expect at most one confirmation click.
+  instructions) with macOS specifics folded in explicitly, not left implicit. **The documented order
+  is corrected from the plan's build order, per the `-T` finding in Step 1** — install the app
+  *before* provisioning the cert, not after:
+  1. Build/install the `.dmg` first, including the Gatekeeper right-click → Open workaround (below)
+     — the app must exist at `/Applications/DTL App.app` before the next step, because `-T` requires
+     its target to already exist (confirmed empirically — see Step 1).
+  2. Run `lab/setup-macos.sh` — generates certs, stands up Apache/Postgres/Zitadel, and hands over
+     the two `security` commands, now referencing the real installed app path.
+  3. Run those two commands, with a note that they need a real login session (not SSH) and to expect
+     at most one confirmation click.
+  4. Launch via `lab/run-app-macos.sh`.
   - **Gatekeeper workaround for the `.dmg`:** since it's unsigned and will carry a quarantine
     attribute once downloaded (browser/Slack/etc.), document the right-click → Open → confirm flow
     as the primary instruction (no Terminal needed), with `xattr -cr` as a secondary one-liner for
@@ -504,6 +565,16 @@ CLAUDE.md                 ← MODIFY: Scope/Platforms lines (Step 9)
 9. **D-M6-9 · Acceptance criterion 1's manual-step count is exactly two, not three.** Resolves the
    contradiction flagged in review — D-M6-3's CLI-driven Postgres means the GUI app is never opened,
    so the only manual steps anywhere in `setup-macos.sh` are the two `security` commands.
+10. **D-M6-10 · The documented operational order is app-install first, lab setup second — the
+    reverse of the plan's own build order.** Confirmed empirically, not assumed: `security import -T
+    <path>` fails immediately (`SecTrustedApplicationCreateFromPath ...: No such file or directory`)
+    if the target binary doesn't exist yet — it does not defer the check. `setup-macos.sh` prints the
+    two `security` commands referencing `/Applications/DTL App.app/...`, so that path must already
+    be real when the operator runs them. This only affects the *documented runbook* (Step 6) and
+    `setup-macos.sh`'s own path-existence check before printing its commands — it does not change
+    which order the scripts themselves get *written* in during implementation (Step 1 can still be
+    built and tested before Step 5, using a manually-placed test binary the way this finding itself
+    was verified).
 
 ## Risk assessment
 
@@ -515,10 +586,14 @@ CLAUDE.md                 ← MODIFY: Scope/Platforms lines (Step 9)
   working directives are carried over into the committed template verbatim (only the absolute paths
   around them get substituted at runtime — see Step 1), and Step 7's behavioral-contract comment
   exists specifically so nobody "simplifies" this `RewriteCond` back to the broken form later.
-- **R3 (was open, now resolved) — `security delete-identity`'s exact behavior.** Verified directly
-  during plan review, not left as an assumption into implementation — see Step 3 and D-M6-9. Kept
-  here as a record that this was the one genuine unknown in the original plan and it closed clean:
-  exists on macOS 12, correct `-c <CN>` syntax, atomic cert+key removal, no GUI-session requirement.
+- **R3 (partially resolved) — `security delete-identity`'s behavior.** The command's existence,
+  syntax, and atomic cert+key removal are fully verified (see Step 3) — that part is closed. **What
+  remains genuinely open:** whether it prompts for authorization when run as a child process of the
+  packaged GUI app specifically, as opposed to a terminal/SSH context. The SSH test that closed the
+  syntax question cannot answer this — an SSH session can't display a prompt at all, so its clean
+  exit is consistent with either "no prompt needed" or "would have prompted, failed differently
+  instead." This is why Step 3's verification now has a dedicated, separately-named check for it
+  rather than treating the SSH result as sufficient — see Step 3.
 - **R4 (new) — the Postgres clean-slate design (dedicated `$PGDATA`, driven via `pg_ctl`/`initdb`
   from Postgres.app's bundled binaries) is reasoned, not yet run.** Unlike R3, this one is still
   open going into implementation — Postgres.app was never installed during smoke testing, so nothing
