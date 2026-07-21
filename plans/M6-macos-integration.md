@@ -37,11 +37,14 @@ he runs them today from the `.deb`. Two halves, same shape as M4:
 
 ## Acceptance criteria
 
-1. `lab/setup-macos.sh` stands up the full native lab — Apache mTLS server, Postgres.app-backed
-   Zitadel, seeded project + native PKCE app + test user + kill-switch keypair — with the same
-   "zero console interaction, run one script" experience as `lab/setup.sh`, **except** the two
-   `security` commands that require a real GUI session and a typed password (see verified inputs) —
-   those are the one honest exception, documented up front, not discovered mid-setup.
+1. `lab/setup-macos.sh` stands up the full native lab — Apache mTLS server, a dedicated Postgres
+   instance driven via Postgres.app's bundled CLI binaries, Zitadel, seeded project + native PKCE
+   app + test user + kill-switch keypair — with the same "zero console interaction, run one script"
+   experience as `lab/setup.sh`, **except exactly two** `security` commands (`import` and
+   `add-trusted-cert`) that require a real GUI session and a typed password (see verified inputs).
+   Those two are the only exceptions — documented up front, not discovered mid-setup, and **not**
+   joined by a third manual step to launch Postgres.app's GUI (see Step 1 and D-M6-8: Postgres is
+   driven entirely through its bundled CLI binaries, the GUI app itself is never opened).
 2. All five core features work end-to-end on macOS through the packaged `.dmg`, mirroring M4's DoD:
    branding/custom homepage (M1), OIDC login (M2), mTLS device cert presented + accepted (M0), the
    kill switch wipes and locks the device out (M3), and the two-layer session compose (M4).
@@ -122,12 +125,31 @@ Two non-obvious things that cost real debugging time and must not be re-discover
   `User`/`Group` directives entirely — specifying them is what would force a root-owned privilege
   drop; omitting them just runs the whole thing as the invoking user.
 
-**Postgres: Postgres.app, not Homebrew.** Homebrew's `postgresql@16` formula ships no bottle older
-than macOS Sonoma — installing it here means compiling Postgres from source on an emulated Core2Duo,
-a real risk of the "hours or fail outright" scenario. Postgres.app v2.9.5 sidesteps this entirely:
-universal binary (Intel + Apple Silicon), requires macOS 10.15+ (comfortably covers Monterey), bundles
-**PostgreSQL 16.14** — matches the pinned `postgres:16-alpine` major version exactly — and installs by
-dragging the `.app` to `/Applications`. No compile, no Homebrew, no sudo.
+**Postgres: Postgres.app's bundled binaries, driven directly — the GUI app itself is never launched.**
+Homebrew's `postgresql@16` formula ships no bottle older than macOS Sonoma — installing it here means
+compiling Postgres from source on an emulated Core2Duo, a real risk of the "hours or fail outright"
+scenario. Postgres.app v2.9.5 sidesteps the compile risk entirely: universal binary (Intel + Apple
+Silicon), requires macOS 10.15+ (comfortably covers Monterey), bundles **PostgreSQL 16.14** — matches
+the pinned `postgres:16-alpine` major version exactly — and installs by dragging the `.app` to
+`/Applications`. No compile, no Homebrew, no sudo for the install itself.
+
+Confirmed via Postgres.app's own documentation (not yet installed/tested on the VM — this is a design
+decision, not a smoke-tested fact like the rest of this section): it bundles standard PostgreSQL CLI
+binaries at `/Applications/Postgres.app/Contents/Versions/16/bin/` — `initdb`, `pg_ctl`, `createdb`,
+`dropdb`, `psql`. These are ordinary upstream PostgreSQL tools; Postgres.app is a convenience bundler
+around them, nothing more. This means the GUI application never needs to launch at all — `pg_ctl -D
+<data-dir> start` against a **dedicated data directory** (not Postgres.app's own default one) is
+standard `pg_ctl`/`initdb` usage, unrelated to how the binaries happen to be packaged. This is what
+closes both open questions raised in review: it avoids the third manual GUI-launch step (acceptance
+criterion 1 stays at exactly two manual steps), and — because `setup-macos.sh` owns this data
+directory exclusively — wiping it on every run (`rm -rf` + fresh `initdb`) is the direct, literal
+equivalent of Linux's `podman volume rm zitadel-db`, not an approximation of it. See Step 1 for the
+exact mechanics, and D-M6-8/D-M6-9 for why this is the right shape. **Flagged honestly:** this
+specific workflow — `initdb`/`pg_ctl` against a self-managed data directory using Postgres.app's
+bundled binaries — has not been run end-to-end on the VM. Postgres.app was never installed during any
+smoke test in this investigation; everything above is reasoned from confirmed binary presence plus
+standard, well-documented PostgreSQL CLI behavior, not observed directly. Implementation should treat
+this as the design, and verify it as the first real step of Step 1 — not assume it.
 
 **Zitadel: darwin-amd64 binary exists for the exact pinned version.** Confirmed via the GitHub
 releases API (not just "latest") — `v2.71.10` ships `zitadel-darwin-amd64.tar.gz` alongside the Linux
@@ -180,6 +202,30 @@ security add-trusted-cert -r trustRoot -p ssl \
   **`src/main/cert-select.js` needs no code changes** — confirmed by running it, not assumed from
   reading the API docs.
 
+**Cert *removal* — `security delete-identity` — is now verified too, not just designed.** This was
+the one piece of the whole investigation still resting on an assumption (originally flagged as R3);
+resolved by testing it directly against the real leftover identity from the cert-provisioning smoke
+test above, over the same SSH session that could not run `security import`:
+
+```bash
+security delete-identity -c "DTL-Ubuntu-Test-Device" -t ~/Library/Keychains/login.keychain-db
+```
+
+- **Exists on macOS 12, exit 0.** Matching syntax is `-c <common-name>` (as guessed) — confirmed via
+  `security delete-identity`'s own usage text: `[-c name] [-Z hash] [-t]`, matching by common-name
+  substring or by SHA hash. `-t` additionally removes user trust settings for the identity.
+- **Removes the certificate and its private key atomically** — confirmed by checking both
+  independently afterward: `security find-certificate -c "DTL-Ubuntu-Test-Device"` and
+  `security find-key -a "DTL-Ubuntu-Test-Device"` both returned "could not be found" post-deletion.
+  This is the Keychain analogue of NSS's `-F` (not `-D`) — no orphaned-key trap, confirmed rather
+  than inferred from the two APIs looking similar.
+- **Does not require a GUI session — unlike `security import`.** Ran cleanly over plain SSH, no
+  prompt, no `"User interaction is not allowed"` error. This is a genuinely different result from the
+  import/trust side of cert provisioning, not just "also worked" — deletion and import apparently
+  have different interaction requirements on this OS version. Confirmed the CA cert was left
+  untouched (scoping by common name was precise, not a blunt "clear everything" match).
+- This directly resolves Step 3 below — no longer an open risk.
+
 **Electron renders fine on this hardware.** 1.3s from process start to the `ready-to-show` event;
 a continuous CSS animation (gradient sweep + pulsing dot) and a scrollable content area both looked
 smooth under manual observation over VNC. **GPU-related errors appear in the console log on every
@@ -201,13 +247,15 @@ platform branch inside `wipe.js`, no other `src/main/` changes.
 ```
 lab/
   setup.sh              ← UNCHANGED (Linux, verified, do not touch)
-  setup-macos.sh         ← NEW: Apache + Postgres.app + bare zitadel binary, same 11-step shape
+  setup-macos.sh         ← NEW: Apache + Postgres CLI-driven + bare zitadel binary, same 11-step shape
   teardown.sh            ← UNCHANGED
-  teardown-macos.sh      ← NEW: mirrors teardown.sh + Keychain CA-trust removal
+  teardown-macos.sh      ← NEW: mirrors teardown.sh + Postgres $PGDATA wipe + Keychain CA-trust removal
   run-app.sh             ← UNCHANGED
   run-app-macos.sh        ← NEW: source .runtime-env + launch, no dbus/keyring bootstrap
-  apache/                ← NEW: httpd.conf template (carried over from ~/apache-test), server/CA
+  apache/                ← NEW: httpd.conf.template (paths as placeholders, resolved by
+                             setup-macos.sh into git-ignored lab/.apache-runtime.conf), server/CA
                              cert templates mirroring lab/certs/*.ext
+  .postgres-data/        ← GENERATED, git-ignored — dedicated $PGDATA, wiped every setup-macos.sh run
   nginx/mtls.conf        ← UNCHANGED (behavior contract comment added — see Step 7)
 
 src/main/
@@ -250,50 +298,93 @@ CLAUDE.md                 ← MODIFY: Scope/Platforms lines (Step 9)
 
 ### Step 1 — `lab/setup-macos.sh`
 
-- **Files:** `lab/setup-macos.sh` *(new)*, `lab/apache/httpd.conf` *(new, carried over from
-  `~/apache-test/httpd.conf`)*, `lab/apache/certs/{server,ca}.ext` *(new, mirroring
-  `lab/certs/*.ext`)*.
-- **What it does:** native-process equivalent of `lab/setup.sh`'s 11 steps — generate the cert chain
-  (same `openssl` calls, mac-local), start Apache (`httpd -f lab/apache/httpd.conf -k start`, no
-  sudo per verified inputs), generate the kill-switch keypair, start Postgres.app (or confirm it's
-  running — this is the one component started outside the script, since it's a GUI `.app`), start
-  Zitadel as a background process with the mapped env vars, run `seed-zitadel.sh` unchanged, write
-  `lab/.runtime-env`. **Stops and hands the operator the two `security import` /
-  `security add-trusted-cert` commands** (with the actual generated cert paths substituted in)
-  instead of attempting them itself — per the verified GUI-session requirement, a script invoked
-  non-interactively cannot complete this step.
+- **Files:** `lab/setup-macos.sh` *(new)*, `lab/apache/httpd.conf.template` *(new — see path note
+  below)*, `lab/apache/certs/{server,ca}.ext` *(new, mirroring `lab/certs/*.ext`)*.
+- **What it does:** native-process equivalent of `lab/setup.sh`'s 11 steps, in order:
+  1. Generate the cert chain (same `openssl` calls, mac-local).
+  2. **Generate the real `httpd.conf` from a template, not hand-copy `~/apache-test/httpd.conf`
+     verbatim.** The throwaway config has absolute paths baked in throughout — `PidFile`, `Mutex`,
+     `ErrorLog`/`CustomLog`, `SSLCertificateFile`/`SSLCertificateKeyFile`/`SSLCACertificateFile`,
+     `DocumentRoot` — all hardcoded to `/Users/system/apache-test/...`. None of that survives being
+     committed to the repo as-is (wrong on any other machine, wrong even on this one if the repo
+     moves). The committed file is a **template** with placeholder tokens (e.g. `__REPO_ROOT__`);
+     `setup-macos.sh` substitutes in the real `$REPO_ROOT`-based absolute paths at generation time
+     (mirroring how `setup.sh` already does dynamic substitution for `ISSUER`/`REDIRECT_URI` pulled
+     from `config.js`) and writes the resolved config to a git-ignored path (e.g.
+     `lab/.apache-runtime.conf`), the same "generated fresh each run, never hand-edited" treatment
+     `lab/.runtime-env` already gets.
+  3. Start Apache against the generated config (`httpd -f lab/.apache-runtime.conf -k start`, no
+     sudo per verified inputs).
+  4. Generate the kill-switch keypair (unchanged from Linux).
+  5. **Bring up Postgres with a clean slate, without launching the Postgres.app GUI.** This is the
+     direct macOS analogue of Linux's `podman volume rm zitadel-db` + fresh container start:
+     ```bash
+     PGBIN="/Applications/Postgres.app/Contents/Versions/16/bin"
+     PGDATA="$REPO_ROOT/lab/.postgres-data"    # per-machine, git-ignored — same treatment as .runtime-env
+     rm -rf "$PGDATA"                            # clean slate, every run — the literal equivalent
+     "$PGBIN/initdb" -D "$PGDATA" -U root -A trust
+     "$PGBIN/pg_ctl" -D "$PGDATA" -l "$PGDATA-log" -o "-p 5432" start
+     # poll with pg_isready, same pattern setup.sh already uses for the container
+     ```
+     Using `-U root` as the superuser name means Zitadel's existing `ADMIN_USERNAME=root` /
+     `ADMIN_PASSWORD` env vars need no remapping — same 21 env vars, same values, matching Linux
+     exactly. Because `setup-macos.sh` owns this data directory exclusively (never Postgres.app's
+     own default one), wiping it every run is a full, faithful clean-slate — not a narrower
+     "drop just the zitadel database" approximation. **This exact workflow has not been run on the
+     VM** (Postgres.app isn't installed there yet) — verifying it is this step's own first task, not
+     an assumption to build on top of. See the Postgres.app entry in "verified inputs" above for the
+     full reasoning and its honest verification status.
+  6. Start Zitadel as a background process with the mapped env vars (unchanged mapping from the
+     verified-inputs section).
+  7. Run `seed-zitadel.sh` unchanged.
+  8. Write `lab/.runtime-env`.
+  9. **Stop and hand the operator exactly two commands** — `security import` and
+     `security add-trusted-cert`, with the actual generated cert paths substituted in — instead of
+     attempting them itself, per the verified GUI-session requirement. **Nothing else in this script
+     requires operator interaction** — Postgres is CLI-driven per step 5, so there is no third manual
+     "launch Postgres.app" step, resolving the contradiction flagged in review.
 - **Verify:** `curl` the three ports with/without the client cert, matching the acceptance-criteria
   table above; confirm Zitadel discovery matches `config.js`'s issuer (same assertion `setup.sh`
-  already makes); confirm `lab/.runtime-env` is written.
+  already makes); confirm `lab/.runtime-env` is written; **run `setup-macos.sh` twice in a row** and
+  confirm the second run succeeds cleanly against a fresh Zitadel/Postgres state — this is the
+  concrete test that the clean-slate step actually works, not just that the first run does.
 
 ### Step 2 — `lab/teardown-macos.sh`
 
 - **Files:** `lab/teardown-macos.sh` *(new)*.
 - **What it does:** mirrors `lab/teardown.sh`'s structure (both modes: full and `--for-setup`) —
-  stop Apache (`httpd -k stop`), stop the Zitadel process, remove `lab/.runtime-env` and the seed
-  dir, clear `tokens.enc`/`kill-ledger.json`, remove the generated cert files, remove the kill
-  signing keypair. **Full mode additionally removes the client identity and the trusted CA from
-  Keychain** — `security delete-identity` for the client cert+key (see Step 3 for why not
-  `delete-certificate`), and `security remove-trusted-cert` **plus** `security delete-certificate`
-  for the CA (removing trust settings alone leaves the CA certificate object itself sitting in the
-  keychain — both calls are needed for a clean removal, the direct analogue of Linux teardown's
-  `certutil -D -n "$CA_NICK"`).
+  stop Apache (`httpd -k stop`), **stop Postgres and remove its dedicated data directory**
+  (`"$PGBIN/pg_ctl" -D "$PGDATA" stop` then `rm -rf "$PGDATA"` — the `--for-setup` subset removes
+  this too, same as it does for the container volume on Linux, since a stale `$PGDATA` defeats the
+  whole point of Step 1's clean-slate design), stop the Zitadel process, remove `lab/.runtime-env`
+  and the seed dir, clear `tokens.enc`/`kill-ledger.json`, remove the generated cert files, remove
+  the kill signing keypair. **Full mode additionally removes the client identity and the trusted CA
+  from Keychain** — `security delete-identity -c "$CLIENT_CN" -t` for the client cert+key (now
+  verified — see Step 3), and `security remove-trusted-cert` **plus**
+  `security delete-certificate -c "$CA_NICK"` for the CA (removing trust settings alone leaves the
+  CA certificate object itself sitting in the keychain — both calls are needed for a clean removal,
+  the direct analogue of Linux teardown's `certutil -D -n "$CA_NICK"`).
 - **Verify:** `security find-identity` / `security find-certificate` show nothing matching after a
-  full teardown; re-running `setup-macos.sh` afterward succeeds from a genuinely clean state.
+  full teardown; `$PGDATA` no longer exists; re-running `setup-macos.sh` afterward succeeds from a
+  genuinely clean state (the same twice-in-a-row test from Step 1, run via a teardown in between
+  this time).
 
 ### Step 3 — `src/main/wipe.js` macOS branch
 
 - **Files:** `src/main/wipe.js` *(modify)*.
 - **What it does:** wraps clause (b) — the NSS `certutil -F` call — in a `process.platform` branch.
-  macOS: `security delete-identity` matched by the same `CERT_SUBJECT_CN`, **not**
+  macOS: `security delete-identity -c "${CERT_SUBJECT_CN}" -t`, **not**
   `security delete-certificate`. This mirrors the existing NSS comment's own warning almost exactly
-  (`"NEVER use -D - it removes only the cert, orphaning the private key"`) — `delete-certificate`
-  on macOS is the same trap: it can remove the certificate object while leaving the private key
-  behind, whereas `delete-identity` removes the cert+key pair atomically, matching what `-F` does on
-  NSS. **This exact command has not been tested yet** — flagged honestly rather than presented as
-  verified; confirming `security delete-identity`'s exact matching syntax and atomic behavior is
-  part of this step's own verification, not a carried-over smoke-test fact like the rest of this
-  plan.
+  (`"NEVER use -D - it removes only the cert, orphaning the private key"`) — `delete-certificate` on
+  macOS is the same trap: it removes the certificate object but can leave the private key behind,
+  whereas `delete-identity` removes the cert+key pair atomically, matching what `-F` does on NSS.
+  **Verified directly during review** (no longer an open assumption, formerly R3): ran against the
+  real leftover identity from the cert-provisioning smoke test, over plain SSH — exit 0, both the
+  certificate and its private key confirmed gone independently afterward
+  (`security find-certificate` / `security find-key` both returned "could not be found"), and —
+  notably different from `security import` — **no GUI-session requirement at all**, ran cleanly with
+  no prompt. `wipe()`'s existing `runCertutil()`-style helper pattern (spawn, capture stderr, reject
+  on non-zero exit) carries over directly for the `security` invocation.
 - **Verify:** repeat the same two-path test already run on Linux for the `da457b0` fix (success
   path: real cert+key in Keychain, real `tokens.enc`, confirm `[wipe] Done. { sessionCleared: true,
   certDeleted: true, tokensCleared: true }` byte-for-byte identical to the Linux log line; failure
@@ -387,9 +478,12 @@ CLAUDE.md                 ← MODIFY: Scope/Platforms lines (Step 9)
    server alternative early — reimplementing mTLS semantics by hand risks subtle divergence from
    nginx (e.g. wrong status code) in a PoC specifically about device security, where that divergence
    would be the whole point being undermined.
-3. **D-M6-3 · Postgres = Postgres.app, not Homebrew-compiled `postgresql@16`.** Avoids the real risk
-   of a multi-hour or failing source compile on emulated hardware; bundles the exact matching major
-   version.
+3. **D-M6-3 · Postgres binaries = Postgres.app's bundle, but driven directly via `pg_ctl`/`initdb`
+   against a dedicated data directory — the GUI app is never launched.** Avoids the real risk of a
+   multi-hour or failing source compile on emulated hardware (the reason Homebrew was rejected);
+   bundles the exact matching major version; and, because `setup-macos.sh` owns its own `$PGDATA`
+   rather than sharing Postgres.app's default one, wiping it every run is a literal equivalent of
+   Linux's `podman volume rm zitadel-db` rather than an approximation — see D-M6-8.
 4. **D-M6-4 · `wipe.js` gets a `process.platform` branch, not a formalized `CertStore` interface.**
    Deliberate deviation from `roadmap.md`'s stated M5 dependency — see the top of this document.
 5. **D-M6-5 · Separate scripts throughout (`*-macos.sh`), never a branch inside the existing Linux
@@ -400,6 +494,16 @@ CLAUDE.md                 ← MODIFY: Scope/Platforms lines (Step 9)
 7. **D-M6-7 · No automated config-sync between `mtls.conf` and the Apache config.** A documented,
    manually-checked behavioral contract (Step 7) is the right amount of rigor for a PoC; a
    templated/generated shared config would be solving a problem this project doesn't have yet.
+8. **D-M6-8 · Zitadel's Postgres database gets a full clean-slate every `setup-macos.sh` run**,
+   matching Linux's every-run container-volume nuke, via `rm -rf $PGDATA` + fresh `initdb` rather
+   than a narrower `DROP DATABASE zitadel` (which would need a persistent, already-initialized
+   cluster to drop *against*, adding its own bootstrapping problem). Full-cluster wipe is simpler
+   and more faithful to what Linux actually does. Genuinely closes the gap flagged in review: without
+   this, a second `setup-macos.sh` run would hit an already-initialized Zitadel and either fail
+   `start-from-init` or seed on top of stale data, breaking the "equivalent to Linux" claim outright.
+9. **D-M6-9 · Acceptance criterion 1's manual-step count is exactly two, not three.** Resolves the
+   contradiction flagged in review — D-M6-3's CLI-driven Postgres means the GUI app is never opened,
+   so the only manual steps anywhere in `setup-macos.sh` are the two `security` commands.
 
 ## Risk assessment
 
@@ -408,19 +512,28 @@ CLAUDE.md                 ← MODIFY: Scope/Platforms lines (Step 9)
 - **R2 — the `:8443` no-cert 400 regresses.** This is the single most fragile piece of this whole
   plan — it took two failed attempts and a debug header to get right during smoke testing (see
   verified inputs), and depends on the non-obvious `%{SSL:...}` prefix. *Mitigation:* the exact
-  working config is carried over verbatim in Step 1, and Step 7's behavioral-contract comment exists
-  specifically so nobody "simplifies" this `RewriteCond` back to the broken form later.
-- **R3 — `security delete-identity`'s exact behavior is unverified.** Unlike almost everything else
-  in this plan, this command was never smoke-tested — flagged explicitly in Step 3 rather than
-  assumed to work like its NSS analogue.
-- **R4 — the two interactive `security` prompts break the "one script, zero interaction" promise
+  working directives are carried over into the committed template verbatim (only the absolute paths
+  around them get substituted at runtime — see Step 1), and Step 7's behavioral-contract comment
+  exists specifically so nobody "simplifies" this `RewriteCond` back to the broken form later.
+- **R3 (was open, now resolved) — `security delete-identity`'s exact behavior.** Verified directly
+  during plan review, not left as an assumption into implementation — see Step 3 and D-M6-9. Kept
+  here as a record that this was the one genuine unknown in the original plan and it closed clean:
+  exists on macOS 12, correct `-c <CN>` syntax, atomic cert+key removal, no GUI-session requirement.
+- **R4 (new) — the Postgres clean-slate design (dedicated `$PGDATA`, driven via `pg_ctl`/`initdb`
+  from Postgres.app's bundled binaries) is reasoned, not yet run.** Unlike R3, this one is still
+  open going into implementation — Postgres.app was never installed during smoke testing, so nothing
+  about this specific workflow has been observed directly. *Mitigation:* Step 1 calls this out
+  explicitly and treats verifying it as the step's own first task; the twice-in-a-row test in Step
+  1's verification is designed specifically to catch a clean-slate failure before it reaches the
+  acceptance-criteria gate.
+- **R5 — the two interactive `security` prompts break the "one script, zero interaction" promise
   `lab/setup.sh` set on Linux.** *Mitigation:* documented as an explicit, known exception in the
   acceptance criteria and the setup guide, not discovered mid-setup by whoever runs this next.
-- **R5 — Gatekeeper blocks the manager's `.dmg` on first open with no explanation.**
+- **R6 — Gatekeeper blocks the manager's `.dmg` on first open with no explanation.**
   *Mitigation:* Step 6 documents the workaround as a first-class part of the setup guide.
-- **R6 — over-claiming verification.** Several pieces of this plan (Step 3's `delete-identity`, the
-  universal build) are genuinely unverified. *Mitigation:* called out explicitly wherever that's
-  true, rather than writing every step in the same confident voice as the smoke-tested parts.
+- **R7 — over-claiming verification.** Even after closing R3, at least R4 and the universal-build
+  question remain genuinely unverified. *Mitigation:* called out explicitly wherever that's true,
+  rather than writing every step in the same confident voice as the smoke-tested parts.
 
 ## Security considerations (PoC scope)
 
