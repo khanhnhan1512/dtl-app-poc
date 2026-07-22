@@ -128,31 +128,48 @@ Two non-obvious things that cost real debugging time and must not be re-discover
   `User`/`Group` directives entirely — specifying them is what would force a root-owned privilege
   drop; omitting them just runs the whole thing as the invoking user.
 
-**Postgres: Postgres.app's bundled binaries, driven directly — the GUI app itself is never launched.**
-Homebrew's `postgresql@16` formula ships no bottle older than macOS Sonoma — installing it here means
-compiling Postgres from source on an emulated Core2Duo, a real risk of the "hours or fail outright"
-scenario. Postgres.app v2.9.5 sidesteps the compile risk entirely: universal binary (Intel + Apple
-Silicon), requires macOS 10.15+ (comfortably covers Monterey), bundles **PostgreSQL 16.14** — matches
-the pinned `postgres:16-alpine` major version exactly — and installs by dragging the `.app` to
-`/Applications`. No compile, no Homebrew, no sudo for the install itself.
+**Postgres: Postgres.app's bundled binaries, driven directly — the GUI app itself is never launched.
+Now fully verified end-to-end (Step 1 implementation), not just designed.** Homebrew's `postgresql@16`
+formula ships no bottle older than macOS Sonoma — installing it here means compiling Postgres from
+source on an emulated Core2Duo, a real risk of the "hours or fail outright" scenario. Postgres.app
+v2.9.5 sidesteps the compile risk entirely: universal binary (Intel + Apple Silicon), requires macOS
+10.15+ (comfortably covers Monterey), and — installed correctly — bundles **PostgreSQL 16.14**,
+matching the pinned `postgres:16-alpine` major version exactly. No compile, no Homebrew, no sudo.
 
-Confirmed via Postgres.app's own documentation (not yet installed/tested on the VM — this is a design
-decision, not a smoke-tested fact like the rest of this section): it bundles standard PostgreSQL CLI
-binaries at `/Applications/Postgres.app/Contents/Versions/16/bin/` — `initdb`, `pg_ctl`, `createdb`,
-`dropdb`, `psql`. These are ordinary upstream PostgreSQL tools; Postgres.app is a convenience bundler
-around them, nothing more. This means the GUI application never needs to launch at all — `pg_ctl -D
-<data-dir> start` against a **dedicated data directory** (not Postgres.app's own default one) is
-standard `pg_ctl`/`initdb` usage, unrelated to how the binaries happen to be packaged. This is what
-closes both open questions raised in review: it avoids the third manual GUI-launch step (acceptance
-criterion 1 stays at exactly two manual steps), and — because `setup-macos.sh` owns this data
-directory exclusively — wiping it on every run (`rm -rf` + fresh `initdb`) is the direct, literal
-equivalent of Linux's `podman volume rm zitadel-db`, not an approximation of it. See Step 1 for the
-exact mechanics, and D-M6-8/D-M6-9 for why this is the right shape. **Flagged honestly:** this
-specific workflow — `initdb`/`pg_ctl` against a self-managed data directory using Postgres.app's
-bundled binaries — has not been run end-to-end on the VM. Postgres.app was never installed during any
-smoke test in this investigation; everything above is reasoned from confirmed binary presence plus
-standard, well-documented PostgreSQL CLI behavior, not observed directly. Implementation should treat
-this as the design, and verify it as the first real step of Step 1 — not assume it.
+It bundles standard PostgreSQL CLI binaries at `/Applications/Postgres.app/Contents/Versions/16/bin/`
+— `initdb`, `pg_ctl`, `createdb`, `dropdb`, `psql`. These are ordinary upstream PostgreSQL tools;
+Postgres.app is a convenience bundler around them, nothing more. The GUI application never needs to
+launch at all — `pg_ctl -D <data-dir> start` against a **dedicated data directory** (not Postgres.app's
+own default one) is standard `pg_ctl`/`initdb` usage, unrelated to how the binaries happen to be
+packaged. `setup-macos.sh` owns this data directory exclusively, so wiping it every run (`rm -rf` +
+fresh `initdb`) is the direct, literal equivalent of Linux's `podman volume rm zitadel-db` — confirmed
+by running `setup-macos.sh` twice in a row and observing a genuinely different Zitadel `client_id`
+each time, not just designed to be that way. See Step 1 for the exact mechanics, D-M6-8/D-M6-9 for
+why this is the right shape.
+
+**Two real findings from actually installing it, not caught by research alone:**
+
+- **The "PostgreSQL 16" download must be the exact one used — not "all currently supported versions"
+  and not the plain "PostgreSQL 18" download.** Postgres.app's download page currently defaults its
+  most prominent links toward PG18. The first install attempt during Step 1 grabbed the PG18-only
+  variant and hit a real, confirmed upstream bug: Zitadel's migration `34_add_cache_schema` fails
+  against Postgres 18 (`ERROR: partitioned tables cannot be unlogged`). The fix
+  (`zitadel/zitadel` PR #11484) exists but was backported to **v4+ only** — this project pins
+  v2.71.10 deliberately (`lab/zitadel/README.md`: v4+ breaks the single-container console), so
+  bumping Zitadel isn't an option. PG16 has no such issue. `PGBIN` in `setup-macos.sh` is hardcoded
+  to `.../Versions/16/bin` specifically because of this, not "latest" — using "latest" would silently
+  regress into this exact bug if a future download defaults to a newer bundled major again.
+- **Installing the `.dmg` needs no GUI session at all** — corrects the plan's original assumption
+  that this step needs a manual drag. `hdiutil attach <dmg> -nobrowse -quiet` mounts it, `cp -R
+  "<mounted-volume>/Postgres.app" /Applications/` installs it, `hdiutil detach` + `rm` cleans up —
+  all plain CLI operations, unlike `security import`/`add-trusted-cert` which are hard-blocked over
+  SSH. Confirmed twice (once for the wrong PG18 download, once for the correct PG16 one). One
+  practical catch, hit both times: downloading a `.dmg` and "moving it to Applications" without
+  mounting it first just puts the disk-image *file* there, not the installed app — worth calling out
+  explicitly in whatever install instructions get written, since it's an easy, silent mistake.
+  **Recommendation for `setup-guide-macos.md`:** give the `hdiutil`/`cp -R` one-liner as the primary
+  instruction instead of "drag to Applications" — fewer steps, and it sidesteps the
+  dmg-vs-app confusion entirely rather than relying on the reader noticing it themselves.
 
 **Zitadel: darwin-amd64 binary exists for the exact pinned version.** Confirmed via the GitHub
 releases API (not just "latest") — `v2.71.10` ships `zitadel-darwin-amd64.tar.gz` alongside the Linux
@@ -333,10 +350,13 @@ CLAUDE.md                 ← MODIFY: Scope/Platforms lines (Step 9)
      `ADMIN_PASSWORD` env vars need no remapping — same 21 env vars, same values, matching Linux
      exactly. Because `setup-macos.sh` owns this data directory exclusively (never Postgres.app's
      own default one), wiping it every run is a full, faithful clean-slate — not a narrower
-     "drop just the zitadel database" approximation. **This exact workflow has not been run on the
-     VM** (Postgres.app isn't installed there yet) — verifying it is this step's own first task, not
-     an assumption to build on top of. See the Postgres.app entry in "verified inputs" above for the
-     full reasoning and its honest verification status.
+     "drop just the zitadel database" approximation. **Verified, not just designed:** ran
+     `setup-macos.sh` twice in a row on the VM; the second run produced a genuinely different Zitadel
+     `client_id` than the first, proving a real fresh init each time, not reuse of stale state. `-A
+     trust` and `--locale=C` were both needed in practice (`initdb` otherwise refuses outright on
+     this VM's broken `LANG`/`LC_*` settings — confirmed, not assumed) but aren't shown in the
+     snippet above; see the real `lab/setup-macos.sh` for the exact invocation. See the Postgres.app
+     entry in "verified inputs" above for the PG16-vs-PG18 finding this also surfaced.
   6. Start Zitadel as a background process with the mapped env vars (unchanged mapping from the
      verified-inputs section).
   7. Run `seed-zitadel.sh` unchanged.
@@ -594,21 +614,22 @@ CLAUDE.md                 ← MODIFY: Scope/Platforms lines (Step 9)
   exit is consistent with either "no prompt needed" or "would have prompted, failed differently
   instead." This is why Step 3's verification now has a dedicated, separately-named check for it
   rather than treating the SSH result as sufficient — see Step 3.
-- **R4 (new) — the Postgres clean-slate design (dedicated `$PGDATA`, driven via `pg_ctl`/`initdb`
-  from Postgres.app's bundled binaries) is reasoned, not yet run.** Unlike R3, this one is still
-  open going into implementation — Postgres.app was never installed during smoke testing, so nothing
-  about this specific workflow has been observed directly. *Mitigation:* Step 1 calls this out
-  explicitly and treats verifying it as the step's own first task; the twice-in-a-row test in Step
-  1's verification is designed specifically to catch a clean-slate failure before it reaches the
-  acceptance-criteria gate.
+- **R4 (resolved) — the Postgres clean-slate design.** Was open going into Step 1 implementation;
+  now verified — `setup-macos.sh` run twice in a row on the VM produced a genuinely different
+  Zitadel `client_id` each time, proving real fresh-init behavior, not reuse of stale state. Also
+  surfaced a real, unrelated finding along the way: the PG18 download (easy to grab by mistake -
+  it's more prominent on Postgres.app's download page than the "PostgreSQL 16" one) hits a
+  confirmed upstream Zitadel/Postgres-18 migration bug whose fix isn't available on our pinned
+  Zitadel version - see the Postgres.app entry in "verified inputs."
 - **R5 — the two interactive `security` prompts break the "one script, zero interaction" promise
   `lab/setup.sh` set on Linux.** *Mitigation:* documented as an explicit, known exception in the
   acceptance criteria and the setup guide, not discovered mid-setup by whoever runs this next.
 - **R6 — Gatekeeper blocks the manager's `.dmg` on first open with no explanation.**
   *Mitigation:* Step 6 documents the workaround as a first-class part of the setup guide.
-- **R7 — over-claiming verification.** Even after closing R3, at least R4 and the universal-build
-  question remain genuinely unverified. *Mitigation:* called out explicitly wherever that's true,
-  rather than writing every step in the same confident voice as the smoke-tested parts.
+- **R7 — over-claiming verification.** R3 and R4 are now resolved; the universal-build question
+  (out of scope for this milestone - see D-M6-6) remains genuinely unverified. *Mitigation:* called
+  out explicitly wherever that's true, rather than writing every step in the same confident voice as
+  the smoke-tested parts.
 
 ## Security considerations (PoC scope)
 

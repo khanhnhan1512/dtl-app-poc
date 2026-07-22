@@ -248,6 +248,12 @@ lab/zitadel/.seed/
 # Runtime env written by lab/setup.sh - per-machine fresh client_id + abs CA path. NEVER commit.
 lab/.runtime-env
 
+# macOS lab (lab/setup-macos.sh) - per-machine generated state, mirrors the entries above.
+lab/.apache-runtime/
+lab/.postgres-data/
+lab/.zitadel-bin/
+lab/.zitadel-runtime/
+
 # Kill-switch lab - signing keypair is generated FRESH per machine by lab/setup.sh (the public
 # half is env-injected via DTL_KILL_PUBLIC_KEY_PEM, not a fixed shipped fixture). Neither half is
 # committed.
