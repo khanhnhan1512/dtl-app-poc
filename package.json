@@ -11,7 +11,8 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "wipe": "electron-vite build && electron . --wipe",
-    "dist:deb": "electron-vite build && electron-builder --linux deb"
+    "dist:deb": "electron-vite build && electron-builder --linux deb",
+    "dist:dmg": "electron-vite build && electron-builder --mac dmg --universal"
   },
   "dependencies": {
     "openid-client": "5.7.1"

@@ -478,14 +478,33 @@ CLAUDE.md                 ← MODIFY: Scope/Platforms lines (Step 9)
 ### Step 5 — Packaging: `.dmg`
 
 - **Files:** `electron-builder.yml` *(modify — add a `mac:` block)*, `package.json` *(modify — add
-  `"dist:dmg": "electron-vite build && electron-builder --mac dmg --x64"`)*.
-- **What it does:** produces `DTL App-<version>.dmg`, matching the ~2-minute build time and output
-  shape already observed during smoke testing (`dist/DTL App-<version>.dmg`,
-  `dist/DTL App-<version>-mac.zip`). The `files` include-list from the existing config (excluding
-  `lab/`, `*.key`, `*.pem`, etc.) applies unchanged — same R1 secret-leak risk as M4, same mitigation.
+  `"dist:dmg": "electron-vite build && electron-builder --mac dmg"`)*.
+- **What it does:** produces `DTL App-<version>-universal.dmg` — **universal (x64+arm64), not
+  x64-only.** No native modules exist in this app and `@electron/universal` was already present in
+  `node_modules`, so a universal build is buildable from this Intel VM at low marginal cost.
+  Measured on a real build (not estimated): **72s vs. 37s** build time, **213MB vs. 120MB** `.dmg`
+  size, universal vs. x64-only. Single `dist:dmg` script, no separate x64 variant — the answer would
+  always be universal, so a choice between the two scripts is a choice nobody actually needs to
+  make. The extra cost is a non-issue for something built occasionally, not on every commit, and it
+  buys a native launch on Apple Silicon (mhoang's Mac) with no Rosetta prompt and no slower cold
+  start — worth more than the time/size delta for a demo. The `files` include-list from the existing
+  config (excluding `lab/`, `*.key`, `*.pem`, etc.) applies unchanged — same R1 secret-leak risk as
+  M4, same mitigation, verified separately against the universal artifact (not assumed identical to
+  an earlier x64-only test build).
+- **Icon:** `src/renderer/assets/logo.png` (446x448, used by `linux:`) is below electron-builder's
+  mac `.icns` minimum (512x512 — confirmed by a real build error, not assumed). A separate
+  `logo_macos.png` (512x512, cropped from a 512x514 source — 2px of pure-white margin trimmed, not
+  the mark) is used for `mac.icon` instead. **Known gaps, not fixed now:** (1) 512px is the floor,
+  not the 1024px electron-builder prefers for a crisp Retina icon — confirmed empirically, the
+  generated `.icns` has no `512x512@2x` slot, so it'll look slightly soft at large Retina sizes;
+  fixable if a higher-resolution source logo turns up. (2) `logo.png` and `logo_macos.png` are two
+  files with no shared source that must be kept visually in sync by hand.
 - **Verify:** `dpkg -c`'s macOS equivalent — inspect the `.dmg`/`.app` contents directly (mount +
   `find`, or extract `app.asar`) and confirm no `lab/`, cert, or key material is bundled, the same
-  check already run for the `.deb`.
+  check already run for the `.deb`. Also confirm the `.icns` actually generated and the packaged
+  `.app` shows the DTL logo (not the default Electron icon), and that the bundle is still named
+  exactly `DTL App.app` (three places hardcode that path: `setup-macos.sh`'s `-T` hint,
+  `run-app-macos.sh`'s `DEFAULT_BIN`, and the setup guide).
 
 ### Step 6 — `docs/setup-guide-macos.md`
 

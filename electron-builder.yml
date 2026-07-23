@@ -39,5 +39,29 @@ linux:
   icon: src/renderer/assets/logo.png
   category: Network
 
+mac:
+  target:
+    - dmg
+  # Universal (x64+arm64), not x64-only: 72s vs 37s build time and a 213MB vs 120MB .dmg -
+  # measured on a real build, not estimated - buys mhoang (Apple Silicon) a native launch with
+  # no Rosetta prompt and no slower cold start. That matters more than either cost for a demo,
+  # and this is built occasionally, not on every commit, so the extra time is a non-issue.
+  #
+  # Arch is NOT set here - the "dist:dmg" script's `--universal` CLI flag controls it, not this
+  # config. Confirmed empirically: once electron-builder gets a CLI target string (`--mac dmg`),
+  # it pre-populates the arch map from process.arch and computeArchToTargetNamesMap() early-
+  # returns that CLI-derived map, silently ignoring any target[].arch set here. An `arch:
+  # [universal]` entry was tried here first and produced an x64-only build with no error or
+  # warning - do NOT re-add it as a substitute for the CLI flag, it will silently do nothing.
+  # src/renderer/assets/logo.png (446x448, used by linux:) is below electron-builder's mac
+  # .icns minimum (512x512, confirmed on a real build). logo_macos.png is a separate 512x512
+  # source cropped from a 512x514 original (2px of pure-white margin trimmed, not the mark).
+  # KNOWN GAP: 512px is the floor, not the 1024px electron-builder prefers for a crisp Retina
+  # icon - no higher-resolution source logo exists yet, so this will look slightly soft at
+  # Retina sizes until one does. Also: logo.png and logo_macos.png are two files that must be
+  # kept visually in sync by hand - no shared source, easy to update one and forget the other.
+  icon: src/renderer/assets/logo_macos.png
+  category: public.app-category.business
+
 # No auto-update server in this PoC.
 publish:
