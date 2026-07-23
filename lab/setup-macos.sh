@@ -32,9 +32,10 @@ APACHE_PIDFILE="$APACHE_RUNTIME_DIR/httpd.pid"
 # (zitadel/zitadel PR #11484) exists but was backported to v4+ only - this project pins
 # v2.71.10 deliberately (see lab/zitadel/README.md: v4+ breaks the single-container console),
 # so bumping Zitadel to pick up the fix isn't an option. PG16 has no such issue and matches the
-# postgres:16-alpine pin on Linux exactly - download Postgres.app's PG16-specific installer
-# (NOT the "all currently supported versions" bundle, which currently defaults its Versions/
-# dir to whatever is newest - confirmed on this machine it was PG18-only for that download).
+# postgres:16-alpine pin on Linux exactly - get any Postgres.app variant that includes PostgreSQL
+# 16. Both the "PostgreSQL 16" download and the "all currently supported versions" bundle ship a
+# Versions/16 directory and work fine (confirmed - "all currently supported versions" is the one
+# actually installed on this machine). Only a PostgreSQL-18-only build lacks Versions/16.
 PGBIN="/Applications/Postgres.app/Contents/Versions/16/bin"
 PGDATA="$REPO_ROOT/lab/.postgres-data"                          # per-machine, git-ignored, wiped every run
 
@@ -63,7 +64,7 @@ for bin in openssl curl python3 node npm security; do
 done
 [[ -x /usr/sbin/httpd ]] || MISSING+=("/usr/sbin/httpd (should ship with macOS)")
 [[ -x /usr/libexec/apache2/mod_ssl.so ]] || MISSING+=("mod_ssl.so (should ship with macOS)")
-[[ -x "$PGBIN/initdb" && -x "$PGBIN/pg_ctl" ]] || MISSING+=("Postgres.app with PostgreSQL 16 specifically (postgresapp.com/downloads.html - the 'PostgreSQL 16' download, NOT 'all currently supported versions' or the PG18-only one - see setup-guide-macos.md)")
+[[ -x "$PGBIN/initdb" && -x "$PGBIN/pg_ctl" ]] || MISSING+=("Postgres.app with PostgreSQL 16 specifically (postgresapp.com/downloads.html - the 'PostgreSQL 16' download or the 'all currently supported versions' bundle both work; avoid only a PostgreSQL-18-only build - see setup-guide-macos.md)")
 if (( ${#MISSING[@]} )); then
   echo "[setup-macos] MISSING PREREQUISITES: ${MISSING[*]}" >&2
   die "prerequisites missing - nothing was changed. Install the above and re-run."

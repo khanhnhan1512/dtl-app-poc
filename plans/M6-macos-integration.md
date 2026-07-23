@@ -149,16 +149,18 @@ why this is the right shape.
 
 **Two real findings from actually installing it, not caught by research alone:**
 
-- **The "PostgreSQL 16" download must be the exact one used — not "all currently supported versions"
-  and not the plain "PostgreSQL 18" download.** Postgres.app's download page currently defaults its
-  most prominent links toward PG18. The first install attempt during Step 1 grabbed the PG18-only
-  variant and hit a real, confirmed upstream bug: Zitadel's migration `34_add_cache_schema` fails
-  against Postgres 18 (`ERROR: partitioned tables cannot be unlogged`). The fix
-  (`zitadel/zitadel` PR #11484) exists but was backported to **v4+ only** — this project pins
-  v2.71.10 deliberately (`lab/zitadel/README.md`: v4+ breaks the single-container console), so
-  bumping Zitadel isn't an option. PG16 has no such issue. `PGBIN` in `setup-macos.sh` is hardcoded
-  to `.../Versions/16/bin` specifically because of this, not "latest" — using "latest" would silently
-  regress into this exact bug if a future download defaults to a newer bundled major again.
+- **Any Postgres.app variant that includes PostgreSQL 16 works — only a PostgreSQL-18-only download
+  does not.** The first install attempt during Step 1 grabbed a PG18-only variant and hit a real,
+  confirmed upstream bug: Zitadel's migration `34_add_cache_schema` fails against Postgres 18
+  (`ERROR: partitioned tables cannot be unlogged`). The fix (`zitadel/zitadel` PR #11484) exists but
+  was backported to **v4+ only** — this project pins v2.71.10 deliberately (`lab/zitadel/README.md`:
+  v4+ breaks the single-container console), so bumping Zitadel isn't an option. **Corrected after
+  further testing:** both the "PostgreSQL 16" download and the "all currently supported versions"
+  bundle ship a `Versions/16` directory and work — "all currently supported versions" is in fact the
+  one actually installed on the test machine. Only a build that installs PostgreSQL 18 exclusively,
+  with no `Versions/16` present, lacks it. `PGBIN` in `setup-macos.sh` is hardcoded to
+  `.../Versions/16/bin` specifically because of this, not "latest" — using "latest" would silently
+  regress into this exact bug if a future default install resolves to a newer bundled major only.
 - **Installing the `.dmg` needs no GUI session at all** — corrects the plan's original assumption
   that this step needs a manual drag. `hdiutil attach <dmg> -nobrowse -quiet` mounts it, `cp -R
   "<mounted-volume>/Postgres.app" /Applications/` installs it, `hdiutil detach` + `rm` cleans up —
@@ -306,13 +308,11 @@ CLAUDE.md                 ← MODIFY: Scope/Platforms lines (Step 9)
 - **Cryptographic device-token binding.** Same boundary M4 already documented (surfacing, not
   binding) — unchanged by this milestone.
 - **Auto-update, MDM-driven install/config.**
-- **Universal (`arm64` + `x64`) `.dmg` build.** Everything in this plan was verified against an
-  `x64`-only build (`electron-builder --mac --x64`), matching the VM's actual architecture.
-  `electron-builder` bundles `@electron/universal` already and a universal build is very likely a
-  small follow-up (no native modules in the runtime dep tree to complicate the lipo merge — see the
-  earlier research this plan builds on) — but it was never actually built or tested end-to-end, so
-  it is **not** claimed as verified here. Ship `x64` for this milestone; treat `universal` as a fast
-  follow once `x64` is proven in the manager's hands.
+- ~~Universal (`arm64` + `x64`) `.dmg` build, deferred as a fast follow.~~ **Superseded by Step 5:**
+  built and verified end-to-end (not just estimated) — `lipo -info` on the binary inside the mounted
+  `.dmg` confirms both `x86_64` and `arm64` slices. 72s vs. 37s build time and 213MB vs. 120MB `.dmg`
+  size, measured against an `x64`-only build, judged worth it to give mhoang (Apple Silicon) a native
+  launch with no Rosetta prompt. `dist:dmg` ships universal by default now, no separate `x64` script.
 
 ## Sub-steps (ordered: lab port first, then the one app change, then packaging, then the gate)
 
@@ -589,8 +589,9 @@ CLAUDE.md                 ← MODIFY: Scope/Platforms lines (Step 9)
 5. **D-M6-5 · Separate scripts throughout (`*-macos.sh`), never a branch inside the existing Linux
    scripts.** `lab/setup.sh`, `teardown.sh`, and `run-app.sh` are verified and already handed over;
    this plan does not touch them, eliminating any path by which this work regresses Linux.
-6. **D-M6-6 · `.dmg` ships unsigned, `x64`-only for this milestone.** Signing/notarization and a
-   universal build are both explicitly out of scope — see "Out of scope" above.
+6. **D-M6-6 · `.dmg` ships unsigned, universal (`x64`+`arm64`) as of Step 5.** Signing/notarization
+   stays out of scope — see "Out of scope" above. Universal was originally deferred as a fast follow
+   but built and verified in Step 5 itself once the marginal build cost (72s vs. 37s) proved small.
 7. **D-M6-7 · No automated config-sync between `mtls.conf` and the Apache config.** A documented,
    manually-checked behavioral contract (Step 7) is the right amount of rigor for a PoC; a
    templated/generated shared config would be solving a problem this project doesn't have yet.

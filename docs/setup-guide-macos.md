@@ -18,6 +18,24 @@ One rule before you begin, because it is the single thing that fails silently wh
 | Apache (httpd) with mod_ssl | ships with macOS | Serves the mTLS test endpoints. This is the macOS substitute for the containers Linux uses, because this hardware cannot run nested virtualization and podman is not an option here |
 
 ---
+## Installing the application
+
+Install the application before you set up the lab or provision the certificate. The certificate command later in this guide uses a flag, `-T`, that grants one specific application permission to use the signing key without a password prompt every time. That flag needs the application to already exist at the path it is pointed at, `/Applications/DTL App.app`, so installing first is not just tidier, later steps fail outright if you skip ahead.
+
+<!-- TODO: add the package download link once the .dmg is published to GitLab, the same way
+     docs/setup-guide.md's download link was added after the .deb was published (commit c2b561b). -->
+
+Download `DTL App-<version>-universal.dmg` and open it. GitLab requires you to be signed in to download it.
+
+Drag `DTL App.app` from the mounted disk image into `/Applications` first, before opening it. Then right-click the copy inside `/Applications`, choose **Open**, and confirm in the dialog that appears. Because the `.dmg` is not signed, Gatekeeper blocks the application the first time you try to open a copy macOS knows was downloaded from the internet, and this is macOS asking you to vouch for it, not a sign that anything is wrong. The order matters here beyond tidiness: Gatekeeper records its approval per file, not per application, so approving the copy still inside the disk image and then dragging that copy to `/Applications` can make macOS ask you to approve it again. Approving the copy already in `/Applications` avoids that.
+
+```bash
+xattr -cr "/Applications/DTL App.app"
+```
+
+If the right-click approach does not work for some reason, this command clears the quarantine attribute directly and has the same effect.
+
+---
 ## Setting up the environment
 
 ```bash
@@ -26,7 +44,7 @@ cd dtl-app-poc/
 bash lab/setup-macos.sh
 ```
 
-The `lab/setup-macos.sh` script does everything a native process can do on its own. It generates the certificate chain, starts Apache and Zitadel, seeds a test project and a test user, generates the signing key for the kill switch, and writes the settings that are specific to this machine. It stops short of loading the certificate into the login keychain, because that step needs a real interactive session and cannot be scripted. The script tells you exactly what to run for that at the end, and the next two sections of this guide walk through it.
+The `lab/setup-macos.sh` script does everything a native process can do on its own. It generates the certificate chain, starts Apache and Zitadel, seeds a test project and a test user, generates the signing key for the kill switch, and writes the settings that are specific to this machine. It stops short of loading the certificate into the login keychain, because that step needs a real interactive session and cannot be scripted. The script tells you exactly what to run for that at the end, and the "Provisioning the certificate" section below walks through it.
 
 > This script starts from a clean state every time it runs. It removes any lab state already on the machine, including the Postgres data directory Zitadel uses. This is fine on a dedicated test machine and destructive on a personal Mac.
 
@@ -57,21 +75,6 @@ curl -s --cacert ca.pem https://localhost:8444/kill
 
 cd ../..   # back to the repo root
 ```
-
----
-## Installing the application
-
-Install the `.dmg` before you provision the certificate, not after. The command that loads the certificate into the keychain uses a flag, `-T`, that grants a specific application permission to use the key without a password prompt every time. That flag needs the application to already exist at the path it is pointed at, so installing first is not just tidier, the later command fails outright if you skip ahead.
-
-Download `DTL App-<version>-universal.dmg` and open it. GitLab requires you to be signed in to download it.
-
-Because the `.dmg` is not signed, Gatekeeper blocks it the first time you try to open a copy that macOS knows was downloaded from the internet. Right-click the `.app` inside the mounted `.dmg`, choose **Open**, and confirm in the dialog that appears. This one-time step is macOS asking you to vouch for an application it cannot verify on its own, not a sign that anything is actually wrong with it.
-
-```bash
-xattr -cr "/Applications/DTL App.app"
-```
-
-If the right-click approach does not work for some reason, this command clears the quarantine attribute directly and has the same effect. Drag the application into `/Applications` first if you have not already.
 
 ---
 ## Provisioning the certificate
