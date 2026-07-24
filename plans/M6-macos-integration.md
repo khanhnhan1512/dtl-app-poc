@@ -537,12 +537,18 @@ CLAUDE.md                 ← MODIFY: Scope/Platforms lines (Step 9)
   *(comment only, part of Step 1's new file)*.
 - **What it does:** this is a PoC, and a templated/generated single-source config for two entirely
   different web servers would be over-engineering for what it solves — KISS wins here. Instead: a
-  short comment block at the top of **both** files stating the five behaviors they must both produce
-  (the acceptance-criteria table above), pointing at this document (`M6-macos-integration.md`) as the
-  source of truth, with an explicit instruction to re-run the five-case `curl` check against
-  **both** platforms whenever either config changes.
-- **Verify:** the comment exists in both files and the five-case table matches this document
-  verbatim.
+  short comment block at the top of **both** files with the literal five-row Port/Behavior table
+  (not a paraphrase — this document is git-ignored, so the comment is the only shipped copy of the
+  contract), each file naming the other as its mirror, and pointing at the "Check the endpoints"
+  section of `docs/setup-guide.md`/`docs/setup-guide-macos.md` as the executable, actually-committed
+  form of the check to re-run on **both** platforms whenever either config changes. **Correction
+  from the original plan:** do NOT cite this document (`M6-macos-integration.md`) as the thing to
+  consult — it's git-ignored, unavailable to most readers, and doing so was a real bug caught during
+  Step 7 itself (Apache's Step-1 comment already pointed here). Background-only mention is fine;
+  it must not be presented as the source of truth.
+- **Verify:** the comment exists in both files with the literal table, `httpd -t` still passes
+  after regenerating the Apache config from the edited template (comment-only changes shouldn't
+  break parsing, confirmed rather than assumed).
 
 ### Step 8 — Full regression pass (the gate, mirrors M4 Step 4)
 

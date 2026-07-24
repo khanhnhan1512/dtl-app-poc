@@ -1,6 +1,6 @@
 # Setup guide (macOS)
 
-This guide reproduces the demo on a macOS machine, starting from a fresh clone and ending with a running application, including the kill switch. It is the macOS counterpart to `docs/setup-guide.md`, but nothing here is carried over from that guide without being checked again on a real Mac. Where the two platforms genuinely differ, this guide says so explicitly rather than leaving it implied.
+This guide reproduces the demo on a macOS machine, starting from a machine with nothing installed and ending with a running application, including the kill switch. It is the macOS counterpart to `docs/setup-guide.md`, but nothing here is carried over from that guide without being checked again on a real Mac. Where the two platforms genuinely differ, this guide says so explicitly rather than leaving it implied.
 
 One rule before you begin, because it is the single thing that fails silently when ignored: **Always launch the application with `bash lab/run-app-macos.sh`, and never open it from Finder or the Dock.** Launching it any other way skips the per-machine settings this script loads, so the application would sign in against the wrong client identifier and the kill switch would verify commands against the wrong key.
 
@@ -10,7 +10,8 @@ One rule before you begin, because it is the single thing that fails silently wh
 | Tool | Where it comes from | Purpose |
 |---|---|---|
 | Postgres.app, with a variant that includes PostgreSQL 16 | postgresapp.com | Runs Zitadel's database. Both the "PostgreSQL 16" download and the "all currently supported versions" download include a PostgreSQL 16 binary and work fine. Avoid only a PostgreSQL 18-only build, because Zitadel's `34_add_cache_schema` migration fails against PostgreSQL 18, and the Zitadel version this lab is pinned to has no fix for it |
-| Node 20 or newer, and npm | nodejs.org or nvm | Required for the lab, not optional. `lab/setup-macos.sh` calls two Node scripts directly, one to sign kill commands and one to generate the kill switch's signing keypair. The keypair generator specifically needs Node's `crypto` module, because the LibreSSL build macOS ships as `/usr/bin/openssl` cannot generate Ed25519 keys. You do not need a build toolchain (Xcode Command Line Tools or similar) for this, because you run the packaged `.app` rather than building from source |
+| Node 20 or newer, and npm | nodejs.org or nvm | Required for the lab, not optional. `lab/setup-macos.sh` calls two Node scripts directly, one to sign kill commands and one to generate the kill switch's signing keypair. The keypair generator specifically needs Node's `crypto` module, because the LibreSSL build macOS ships as `/usr/bin/openssl` cannot generate Ed25519 keys |
+| Xcode Command Line Tools | run `git` once and macOS offers to install them, or `xcode-select --install` | Needed for `git` itself, which the next section uses to clone this repository. Not needed for the application, since you run the packaged `.app` rather than building it from source |
 | openssl | ships with macOS | Generating the certificate chain, meaning the CA, the server certificate, and the device certificate |
 | curl | ships with macOS | Waiting for Zitadel to finish starting, and checking the test server's endpoints |
 | python3 | ships with macOS | Reading Zitadel's setup output while seeding the test project, app, and user |
@@ -44,7 +45,7 @@ cd dtl-app-poc/
 bash lab/setup-macos.sh
 ```
 
-The `lab/setup-macos.sh` script does everything a native process can do on its own. It generates the certificate chain, starts Apache and Zitadel, seeds a test project and a test user, generates the signing key for the kill switch, and writes the settings that are specific to this machine. It stops short of loading the certificate into the login keychain, because that step needs a real interactive session and cannot be scripted. The script tells you exactly what to run for that at the end, and the "Provisioning the certificate" section below walks through it.
+The `lab/setup-macos.sh` script does everything a native process can do on its own. It generates the certificate chain, brings up a dedicated Postgres data directory for Zitadel, starts Apache and Zitadel, seeds a test project and a test user, generates the signing key for the kill switch, and writes the settings that are specific to this machine. It stops short of loading the certificate into the login keychain, because that step needs a real interactive session and cannot be scripted. The script tells you exactly what to run for that at the end, and the "Provisioning the certificate" section below walks through it.
 
 > This script starts from a clean state every time it runs. It removes any lab state already on the machine, including the Postgres data directory Zitadel uses. This is fine on a dedicated test machine and destructive on a personal Mac.
 

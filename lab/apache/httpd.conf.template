@@ -1,7 +1,18 @@
-# DTL mTLS test lab (macOS/Apache) - reproduces lab/nginx/mtls.conf's three ports and five
-# curl-testable behaviours exactly. See docs/internal/M6-macos-integration.md's acceptance-criteria
-# table for the contract both configs must satisfy - re-run the five-case curl check on BOTH
-# platforms if either config changes.
+# DTL mTLS test lab (macOS/Apache) - mirrors lab/nginx/mtls.conf's three ports and five
+# curl-testable behaviors exactly (podman can't run on this hardware, no nested virtualization -
+# this is the macOS substitute for the Linux nginx container). Both configs must produce the same
+# five outcomes below. After changing either config, re-run the five curl checks in the "Check the
+# endpoints" section of docs/setup-guide.md and docs/setup-guide-macos.md against BOTH platforms -
+# those sections are the executable, actually-shipped form of this contract. (There is background
+# rationale in an internal planning doc, but it's git-ignored and not available to most readers -
+# the two setup guides are the real source of truth.)
+#
+#   Port              | Behavior
+#   :8443 valid cert  | 200
+#   :8443 no cert     | 400
+#   :8445 wrong CN    | 403
+#   :8444 no cert     | 200
+#   :8444 /kill       | serves JSON
 #
 #   :8443  mandatory client cert  -> 200 with cert / 400 without (tool-1)
 #   :8445  mandatory client cert + CN gate -> 403 (this device's CN is never on the approved list;
@@ -11,12 +22,20 @@
 #          at - no separate copy)
 #
 # __REPO_ROOT__ is a placeholder, substituted by lab/setup-macos.sh at generation time into the
-# git-ignored lab/.apache-runtime.conf. This file is committed as a template - do not hand-edit
-# paths here expecting them to work on any real machine (see M6 plan, Step 1).
+# git-ignored lab/.apache-runtime/httpd.conf. This file is committed as a template - do not
+# hand-edit paths here expecting them to work on any real machine; see lab/setup-macos.sh for the
+# substitution mechanism.
 #
 # :8443's "optional + RewriteCond %{SSL:...} + [R=400,L]" shape (instead of a simpler
-# "SSLVerifyClient require") is deliberate, not stylistic - see the M6 plan's verified-inputs
-# section for why the bare %{SSL_CLIENT_VERIFY} form silently evaluates wrong here.
+# "SSLVerifyClient require") is deliberate, not stylistic, and took two attempts plus a debug
+# header to get right. mod_rewrite evaluates BEFORE mod_ssl finishes populating the standard
+# subprocess environment table, so a bare %{SSL_CLIENT_VERIFY} - even with SSLOptions +StdEnvVars
+# set - silently reads the WRONG value inside RewriteCond specifically (confirmed with a debug
+# `Header set X-Debug "%{SSL_CLIENT_VERIFY}e"` directive: mod_headers evaluates later and saw the
+# correct value, RewriteCond did not). The %{SSL:varname} form forces a live read from mod_ssl
+# directly and is mandatory here, not optional syntax. :8445's SSLRequire does NOT have this
+# problem, only RewriteCond does. DO NOT "clean this up" to a bare %{SSL_CLIENT_VERIFY} - it will
+# silently break, passing when it should reject.
 
 ServerRoot "__REPO_ROOT__/lab/apache"
 ServerName localhost
@@ -64,7 +83,7 @@ SSLRandomSeed connect builtin
 
 # :8443 - tool-1. optional + SSLRequire-via-RewriteCond so the handshake always completes and
 # the app gets a real HTTP status (400) instead of a TLS-layer failure with no HTTP response at
-# all (the failure mode that would leave the app on a blank screen - see M6 plan).
+# all (the failure mode that would otherwise leave the app on a blank screen).
 <VirtualHost *:8443>
   SSLEngine on
   SSLCertificateFile    "__REPO_ROOT__/lab/certs/server.crt"
