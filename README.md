@@ -50,7 +50,7 @@ The browser presents this unique certificate exclusively to allowlisted internal
 
 ### 4. Remote Kill Switch
 
-To demonstrate remote revocation without an Mobile Device Management (MDM), the application polls a fixed HTTPS control-plane endpoint every 30 seconds. In the lab, this endpoint is served by the local nginx instance at `https://localhost:8444/kill`, which returns a small JSON command signed with an Ed25519 key.
+To demonstrate remote revocation without an Mobile Device Management (MDM), the application polls a fixed HTTPS control-plane endpoint every 30 seconds. In the lab, this endpoint is served by the local nginx instance at `https://localhost:8444/kill`, which returns a small JSON command signed with an Ed25519 key. The lab serves that command from a static file, so a spent command keeps being offered until it is replaced, whereas a real control plane would simply answer that there is no command. The command format and the app side are unchanged either way.
 
 The app executes a wipe only when every check passes: the signature must verify against the trusted public key, the command must name this specific device, it must be fresh (issued within the last 24 hours), and it must not have been executed before. A ledger of executed command IDs prevents an old command from being replayed.
 
@@ -92,7 +92,17 @@ The application code carries over unchanged, because Electron builds Windows bin
 
 ### macOS
 
-Portability and certificate handling look much like Windows. Packaging becomes a disk image, certificates go into the macOS Keychain, and both the certificate lookup and the token storage use that same Keychain with no extra setup. The unknown is distribution. Modern macOS refuses to run applications that Apple has not approved, so shipping even an internal build means an Apple developer account, signing certificates, and Apple's notarization step. We have not done this before, so any estimate for macOS should be treated as soft until we have been through notarization once. We would also need a macOS machine to build and test on, which is a request for the systems team.
+This one is no longer speculation. The app builds for macOS from the same source, as a universal binary that runs natively on both Intel and Apple Silicon, no Rosetta involved. All five features work, verified end to end from the installed `.dmg`, not from a dev tree. Certificates live in the macOS Keychain instead of Linux's NSS store, and the app's certificate-selection code needed no changes at all for that. The kill switch deletes the Keychain identity rather than the NSS certificate, which is the only application code that differs between the two platforms.
+
+What genuinely remains:
+
+* **Code signing and notarization.** This is the real remaining item. It needs an Apple developer account, and it turns out to matter more than expected. An unsigned app is not only blocked by Gatekeeper on download, it also cannot be verified by the Keychain, so the user gets an authorization prompt the first time the app uses its certificate. Signing fixes both.
+
+* **Certificate provisioning is more constrained than on Linux.** The command that loads a certificate into the Keychain refuses to run without an interactive login session, so it cannot be scripted over a remote connection the way the Linux equivalent can. Whoever provisions machines has to account for that.
+
+One honest caveat on the test environment: this was verified on an emulated macOS 12 virtual machine, not on current Apple hardware, so treat behavior on a modern Mac as very likely but not confirmed.
+
+See [docs/setup-guide-macos.md](docs/setup-guide-macos.md) for the exact steps.
 
 ### iOS and Android
 
@@ -108,7 +118,7 @@ The one item worth flagging now is client certificates on iOS. Apple forces appl
 |---|---|---|
 | Linux (Debian, Ubuntu) | [`dtl-app_0.1.0_amd64.deb`](http://gitlab.intern.dtl/khanhnhan/dtl-app-poc/-/packages/1) | Available |
 | Windows | `.exe` installer | Coming soon |
-| macOS | `.dmg` | Coming soon |
+| macOS (Intel, Apple Silicon) | [`DTL App-0.1.0-universal.dmg`](TODO) | Available |
 | iOS, Android | TBD | TBD |
 
 
@@ -116,4 +126,4 @@ The one item worth flagging now is client certificates on iOS. Apple forces appl
 
 The demo runs on any Ubuntu machine that meets the prerequisites, and it needs no manual configuration. One script brings up the whole lab, meaning the certificates, the internal endpoints it protects, and the identity provider with a test user already seeded. A second script launches the application. From there you can walk through every feature above, including the kill switch and the lockout that follows it.
 
-Step by step instructions are in [docs/setup-guide.md](docs/setup-guide.md).
+Step by step instructions are in [docs/setup-guide.md](docs/setup-guide.md) for Linux, and [docs/setup-guide-macos.md](docs/setup-guide-macos.md) for macOS.

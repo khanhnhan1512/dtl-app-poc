@@ -1,5 +1,12 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"><title>tool-1</title>
-<style>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="description"
+          content="DTL mTLS lab test page for tool-1, served behind mandatory client-certificate verification.">
+    <meta name="keywords" content="dtl, mtls, lab, tool-1">
+    <title>tool-1</title>
+    <style>
 :root{
   --surface-2:#ffffff; --surface-1:#f6f5f1;
   --border:#e5e3da; --border-strong:#d0cec4;
@@ -12,20 +19,55 @@
   --font-sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 }
 body{font-family:var(--font-sans);color:var(--text-primary);margin:0;background:var(--surface-1)}
-</style>
-</head><body>
-<!-- verify=<!--#echo var="SSL_CLIENT_VERIFY" --> subject=<!--#echo var="SSL_CLIENT_S_DN" --> -->
-<div style="padding:1.25rem 1.5rem 1.75rem;font-family:var(--font-sans)">
-  <div style="display:flex;align-items:center;gap:8px;background:var(--bg-success);color:var(--text-success);padding:8px 12px;border-radius:var(--radius);font-size:13px;margin-bottom:1.25rem">
-    Secure connection - mutual TLS handshake succeeded with this device&#39;s certificate.
-  </div>
-  <div style="font-size:18px;font-weight:500;margin-bottom:2px">tool-1</div>
-  <div style="font-size:13px;color:var(--text-secondary);margin-bottom:1.25rem">Internal service (placeholder content).</div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:1.25rem">
-    <div style="background:var(--surface-1);border-radius:var(--radius);padding:14px 16px"><div style="font-size:13px;color:var(--text-secondary)">Metric A</div><div style="font-size:24px;font-weight:500;margin-top:4px">42</div></div>
-    <div style="background:var(--surface-1);border-radius:var(--radius);padding:14px 16px"><div style="font-size:13px;color:var(--text-secondary)">Metric B</div><div style="font-size:24px;font-weight:500;margin-top:4px;color:var(--text-success)">+2.4%</div></div>
-    <div style="background:var(--surface-1);border-radius:var(--radius);padding:14px 16px"><div style="font-size:13px;color:var(--text-secondary)">Metric C</div><div style="font-size:24px;font-weight:500;margin-top:4px">63%</div></div>
-  </div>
-  <a href="https://market-data.example.com" style="font-size:13px;color:var(--text-accent)">Open external market data &#8599;</a>
-</div>
-</body></html>
+    </style>
+  </head>
+  <body>
+    <!-- verify=<!--#echo var="SSL_CLIENT_VERIFY" --> subject=<!--#echo var="SSL_CLIENT_S_DN" --> -->
+    <div style="padding:1.25rem 1.5rem 1.75rem;font-family:var(--font-sans)">
+      <div style="display:flex;
+                  align-items:center;
+                  gap:8px;
+                  background:var(--bg-success);
+                  color:var(--text-success);
+                  padding:8px 12px;
+                  border-radius:var(--radius);
+                  font-size:13px;
+                  margin-bottom:1.25rem">
+        Secure connection - mutual TLS handshake succeeded with this device's certificate.
+      </div>
+      <div style="font-size:18px;font-weight:500;margin-bottom:2px">tool-1</div>
+      <div style="font-size:13px;
+                  color:var(--text-secondary);
+                  margin-bottom:1.25rem">Internal service (placeholder content).</div>
+      <div style="display:grid;
+                  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+                  gap:12px;
+                  margin-bottom:1.25rem">
+        <div style="background:var(--surface-1);
+                    border-radius:var(--radius);
+                    padding:14px 16px">
+          <div style="font-size:13px;color:var(--text-secondary)">Metric A</div>
+          <div style="font-size:24px;font-weight:500;margin-top:4px">42</div>
+        </div>
+        <div style="background:var(--surface-1);
+                    border-radius:var(--radius);
+                    padding:14px 16px">
+          <div style="font-size:13px;color:var(--text-secondary)">Metric B</div>
+          <div style="font-size:24px;
+                      font-weight:500;
+                      margin-top:4px;
+                      color:var(--text-success)">+2.4%</div>
+        </div>
+        <div style="background:var(--surface-1);
+                    border-radius:var(--radius);
+                    padding:14px 16px">
+          <div style="font-size:13px;color:var(--text-secondary)">Metric C</div>
+          <div style="font-size:24px;font-weight:500;margin-top:4px">63%</div>
+        </div>
+      </div>
+      <a href="https://market-data.example.com"
+         style="font-size:13px;
+                color:var(--text-accent)">Open external market data ↗</a>
+    </div>
+  </body>
+</html>

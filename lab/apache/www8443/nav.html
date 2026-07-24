@@ -1,1 +1,29 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Nav Test</title></head><body><p>mTLS: verify=<!--#echo var="SSL_CLIENT_VERIFY" --> subject=<!--#echo var="SSL_CLIENT_S_DN" --></p><ul><li><a href="/nav">Same-host (allow)</a></li><li><a href="https://localhost:8444/">Non-designated :8444 (block)</a></li><li><a href="https://example.com/">example.com (block)</a></li><li><a href="https://localhost:8443/nav" target="_blank">Same-host _blank (load in-window)</a></li></ul></body></html>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="description"
+          content="DTL mTLS lab navigation test page, for verifying the app's domain allow-list logic.">
+    <meta name="keywords" content="dtl, mtls, lab, navigation, allow-list">
+    <title>Nav Test</title>
+  </head>
+  <body>
+    <p>
+      mTLS: verify=<!--#echo var="SSL_CLIENT_VERIFY" --> subject=<!--#echo var="SSL_CLIENT_S_DN" -->
+    </p>
+    <ul>
+      <li>
+        <a href="/nav">Same-host (allow)</a>
+      </li>
+      <li>
+        <a href="https://localhost:8444/">Non-designated :8444 (block)</a>
+      </li>
+      <li>
+        <a href="https://example.com/">example.com (block)</a>
+      </li>
+      <li>
+        <a href="https://localhost:8443/nav" target="_blank">Same-host _blank (load in-window)</a>
+      </li>
+    </ul>
+  </body>
+</html>
