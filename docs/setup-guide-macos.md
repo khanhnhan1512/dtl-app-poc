@@ -7,21 +7,21 @@ One rule before you begin, because it is the single thing that fails silently wh
 ---
 ## Prerequisites
 
-| Tool | Where it comes from | Purpose |
+| Tool | 	How to get it | Purpose |
 |---|---|---|
-| Postgres.app, a variant that includes PostgreSQL 16 | postgresapp.com | The database behind the identity provider. Both the "PostgreSQL 16" and "all currently supported versions" downloads work. Avoid a PostgreSQL 18-only build, which the pinned identity provider version cannot run against |
-| Node 20 or newer, and npm | nodejs.org or nvm | Runs the lab's signing scripts |
+| Postgres.app (a build that includes PostgreSQL 16) | Download from postgresapp.com | The database behind the identity provider. Both the "PostgreSQL 16" and "all currently supported versions" downloads work. Avoid a PostgreSQL 18-only build, which the pinned identity provider version cannot run against |
+| Node 20 or newer, with npm | Download from nodejs.org, or install via nvm | Runs the lab's signing scripts |
 | Xcode Command Line Tools | `xcode-select --install` | Provides `git`, used to get the repository. Not needed to run the application itself |
-| openssl | ships with macOS | Generates the certificate chain |
-| curl | ships with macOS | Checks the lab's endpoints during setup |
-| python3 | ships with macOS | Seeds the test project and user |
-| security | ships with macOS | Loads the certificate into the login keychain |
-| Apache (httpd) with mod_ssl | ships with macOS | Serves the mTLS test endpoints, in place of the containers used on Linux |
+| openssl | Preinstalled on macOS | Generates the certificate chain |
+| curl | 	Preinstalled on macOS | Checks the lab's endpoints during setup |
+| python3 | Preinstalled on macOS | Seeds the test project and user |
+| security | 	Preinstalled on macOS | Loads the certificate into the login keychain |
+| Apache (httpd) with mod_ssl | 	Preinstalled on macOS | Serves the mTLS test endpoints, in place of the containers used on Linux |
 
 ---
 ## Installing the application
 
-Download `DTL App-<version>-universal.dmg`. GitLab requires you to be signed in.
+Download [`DTL App-0.1.0-universal.dmg`](http://gitlab.intern.dtl/khanhnhan/dtl-app-poc/-/packages/1).
 
 Open the downloaded file to mount it, drag `DTL App.app` into `/Applications`, then eject the disk image.
 

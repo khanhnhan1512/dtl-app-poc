@@ -93,7 +93,7 @@ The application code carries over unchanged, because Electron builds Windows bin
 
 ### macOS
 
-This one is no longer speculation. The app builds from the same source as a universal binary that runs natively on both Intel and Apple Silicon, and all five features work end to end from the installed `.dmg`. Certificates live in the macOS Keychain rather than Linux's NSS store, and the certificate-selection code needed no changes for that. The wipe deletes the Keychain identity instead of the NSS certificate, and that one function is the only application code that differs between the two platforms.
+The app builds from the same source as a universal binary that runs natively on both Intel and Apple Silicon, and all five features work end to end from the installed `.dmg`. Certificates live in the macOS Keychain rather than Linux's NSS store, and the certificate-selection code needed no changes for that. The wipe deletes the Keychain identity instead of the NSS certificate, and that one function is the only application code that differs between the two platforms.
 
 Two things remain:
 * **The app is not yet code-signed**. An unsigned app is blocked by Gatekeeper on download, and the Keychain cannot verify it either, so the user is prompted the first time the app uses its certificate. Signing fixes both, and it needs an Apple developer account.
@@ -116,7 +116,7 @@ The one item worth flagging now is client certificates on iOS. Apple forces appl
 |---|---|---|
 | Linux (Debian, Ubuntu) | [`dtl-app_0.1.0_amd64.deb`](http://gitlab.intern.dtl/khanhnhan/dtl-app-poc/-/packages/1) | Available |
 | Windows | `.exe` installer | Coming soon |
-| macOS (Intel, Apple Silicon) | [`DTL App-0.1.0-universal.dmg`](TODO) | Available |
+| macOS (Intel, Apple Silicon) | [`DTL App-0.1.0-universal.dmg`](http://gitlab.intern.dtl/khanhnhan/dtl-app-poc/-/packages/1) | Available |
 | iOS, Android | TBD | TBD |
 
 

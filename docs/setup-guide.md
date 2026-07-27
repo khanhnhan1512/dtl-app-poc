@@ -10,7 +10,7 @@ One rule before you begin, because it is the single thing that fails silently wh
 | Tool | Package | Purpose |
 |---|---|---|
 | podman, running rootless | `podman` | Runs the containers for the test server and the identity provider |
-| Node 20 or newer, and npm | nvm is the easiest route | Signing kill commands, and building from source if you want to |
+| Node 20 or newer, and npm | `nvm` | Signing kill commands, and building from source if you want to |
 | openssl | `openssl` | Generating the certificate chain, meaning the CA, the server certificate, and the device certificate |
 | curl | `curl` | Waiting for the identity provider to finish starting, and checking the test server's endpoints |
 | certutil and pk12util | `libnss3-tools` | Loading the device certificate into the machine's certificate store |
@@ -57,9 +57,7 @@ cd ../..   # back to the repo root
 ## Installing the application
 
 
-Download `dtl-app_0.1.0_amd64.deb` and unpack it. This needs no administrator rights, and it is how the demo was verified.
-
-Get the file from the [package download page](http://gitlab.intern.dtl/khanhnhan/dtl-app-poc/-/packages/1). GitLab requires you to be signed in to download it.
+Download [`dtl-app_0.1.0_amd64.deb`](http://gitlab.intern.dtl/khanhnhan/dtl-app-poc/-/packages/1) and unpack it.
 
 ```bash
 dpkg -x /path/to/dtl-app_0.1.0_amd64.deb ~/dtl-app-installed
