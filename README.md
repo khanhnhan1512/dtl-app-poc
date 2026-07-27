@@ -60,7 +60,8 @@ Once a valid wipe command is received, the app destroys its own access: session 
 
   ![Kill switch firing](docs/img/kill-wipe-log.png)
 
-* **Lockout:** On the next launch, the user can still sign in through OIDC, but the device certificate is gone. The internal tools reject the machine, and access only returns once the certificate is re-provisioned manually. The asymmetry here is deliberate. Revoking access is remote and instant while restoring it is not. A signed command can lock a machine out from anywhere, but bringing it back requires someone to re-provision the certificate on that machine.
+* **Lockout:** On the next launch, the user can still sign in through OIDC, but the device certificate is gone. The internal tools reject the machine, and access only returns once the certificate is re-provisioned manually. 
+<!-- The asymmetry here is deliberate. Revoking access is remote and instant while restoring it is not. A signed command can lock a machine out from anywhere, but bringing it back requires someone to re-provision the certificate on that machine. -->
 
   ![Locked out after a wipe](docs/img/kill-locked-out.png)
 
@@ -74,39 +75,36 @@ The switch also fails safe, in both directions. A command that does not verify i
 
 The application itself is finished. What is not finished is everything around it, because the lab fakes those parts locally. The app will need each of them in production:
 
-* **Issuing certificates to machines.** The lab uses a throwaway CA and a manual script to provision device certificates. A production rollout requires a real internal CA and a defined lifecycle strategy: establishing who provisions new machines, when it occurs, and how certificates are revoked for lost devices or offboarded employees. This is a company-wide operational framework rather than application code.
+* **Issuing certificates to machines.** The lab uses a throwaway CA and a manual script to provision device certificates. A production rollout requires a real internal CA and a defined lifecycle strategy: establishing who provisions new machines, when it occurs, and how certificates are revoked for lost devices or offboarded employees.
 
-* **Enforcing mTLS on internal services.** Our internal services do not request a client certificate today, so the lab stands up an nginx server that does. In production, the app requires configuring each internal web application to trust our CA and handle device-level authorization. This configuration takes place on the infrastructure side rather than inside the browser app, scaling with the number of integrated applications.
+* **Enforcing mTLS on internal services.** Our internal services do not request a client certificate today, so the lab stands up an nginx server that does. In production, the app requires configuring each internal web application to trust our CA and handle device-level authorization. 
 
 * **Central Identity Provider (IdP) Integration.** The lab runs its own login server on the test machine. In production the application would point at whatever identity provider the company already uses. The app only needs the address of that provider and an identifier for itself.
 
-* **Building a real control plane for the kill switch.** The lab currently serves the kill command as a static signed file via Nginx. Production requires a dedicated service to issue signed commands, with the signing key securely hosted within the company’s standard key management infrastructure. The underlying command format and client-side implementation remain unchanged.
+* **Building a real control plane for the kill switch.** The lab currently serves the kill command as a static signed file via nginx. Production requires a dedicated service to issue signed commands, with the signing key securely hosted within the company's standard key management infrastructure.
 
-**Delivering per-machine settings.** The application needs a few values that differ from machine to machine, such as the address of the identity provider and the key it trusts for kill commands. In the lab a wrapper script supplies them at launch, which is why for the demo we should not open the app from the desktop menu, because the menu entry does not go through that script. A rollout needs those settings delivered properly, through a system configuration file or through whatever tool manages our Linux machines, so that the application works no matter how it is started.
+* **Delivering per-machine settings.** The application needs a few values that differ from machine to machine, such as the address of the identity provider and the key it trusts for kill commands. In the lab a wrapper script supplies them at launch, which is why for the demo we should not open the app from the desktop menu, because the menu entry does not go through that script. A rollout needs those settings delivered properly, through a system configuration file or through whatever tool manages our machines, so that the application works no matter how it is started.
 
 ### Windows
 
 Everything in the Linux list still applies, and what follows is only what is specific to Windows.
 
-The application code carries over unchanged, because Electron builds Windows binaries from the same source and our packaging tool already produces Windows installers. What changes is the plumbing around certificates. Windows keeps them in its own certificate store, which Electron reads natively, so only the provisioning scripts need rewriting from bash into PowerShell. Token storage actually gets easier, because Windows encrypts them through a built-in mechanism so we don't need the keyring setup on Linux.
+The application code carries over unchanged, because Electron builds Windows binaries from the same source and our packaging tool already produces Windows installers. What changes is the plumbing around certificates. Windows keeps them in its own certificate store, which Electron reads natively, so only the provisioning scripts need rewriting from bash into PowerShell. Token storage actually gets easier, because Windows encrypts them through a built-in mechanism, so the keyring setup is not needed.
 
 ### macOS
 
-This one is no longer speculation. The app builds for macOS from the same source, as a universal binary that runs natively on both Intel and Apple Silicon, no Rosetta involved. All five features work, verified end to end from the installed `.dmg`, not from a dev tree. Certificates live in the macOS Keychain instead of Linux's NSS store, and the app's certificate-selection code needed no changes at all for that. The kill switch deletes the Keychain identity rather than the NSS certificate, which is the only application code that differs between the two platforms.
+This one is no longer speculation. The app builds from the same source as a universal binary that runs natively on both Intel and Apple Silicon, and all five features work end to end from the installed `.dmg`. Certificates live in the macOS Keychain rather than Linux's NSS store, and the certificate-selection code needed no changes for that. The wipe deletes the Keychain identity instead of the NSS certificate, and that one function is the only application code that differs between the two platforms.
 
-What genuinely remains:
+Two things remain:
+* **The app is not yet code-signed**. An unsigned app is blocked by Gatekeeper on download, and the Keychain cannot verify it either, so the user is prompted the first time the app uses its certificate. Signing fixes both, and it needs an Apple developer account.
 
-* **Code signing and notarization.** This is the real remaining item. It needs an Apple developer account, and it turns out to matter more than expected. An unsigned app is not only blocked by Gatekeeper on download, it also cannot be verified by the Keychain, so the user gets an authorization prompt the first time the app uses its certificate. Signing fixes both.
+* **Certificate provisioning is more constrained than on Linux.** Loading a certificate into the Keychain needs an interactive login session on the machine, so it cannot be pushed to a fleet over a remote connection the way the Linux tooling can.
 
-* **Certificate provisioning is more constrained than on Linux.** The command that loads a certificate into the Keychain refuses to run without an interactive login session, so it cannot be scripted over a remote connection the way the Linux equivalent can. Whoever provisions machines has to account for that.
-
-One honest caveat on the test environment: this was verified on an emulated macOS 12 virtual machine, not on current Apple hardware, so treat behavior on a modern Mac as very likely but not confirmed.
-
-See [docs/setup-guide-macos.md](docs/setup-guide-macos.md) for the exact steps.
+> This was verified on `a macOS 12 virtual machine`, not on current Apple hardware, so treat behavior on a modern Mac as very likely rather than confirmed.
 
 ### iOS and Android
 
-Mobile is not a port. Electron does not run on phones, so this would be a second codebase that shares specifications with the desktop application rather than sharing code.
+Electron does not run on phones, so this would be a second codebase that shares specifications with the desktop application rather than sharing code.
 
 What carries across is design rather than implementation. The kill command format was deliberately made independent of any programming language, so a mobile client can verify the same signature, and the login flow is standard on both platforms.
 
@@ -124,6 +122,6 @@ The one item worth flagging now is client certificates on iOS. Apple forces appl
 
 ## Trying it yourself
 
-The demo runs on any Ubuntu machine that meets the prerequisites, and it needs no manual configuration. One script brings up the whole lab, meaning the certificates, the internal endpoints it protects, and the identity provider with a test user already seeded. A second script launches the application. From there you can walk through every feature above, including the kill switch and the lockout that follows it.
-
-Step by step instructions are in [docs/setup-guide.md](docs/setup-guide.md) for Linux, and [docs/setup-guide-macos.md](docs/setup-guide-macos.md) for macOS.
+Step by step instructions are in:
+- [docs/setup-guide.md](docs/setup-guide.md) for Linux
+- [docs/setup-guide-macos.md](docs/setup-guide-macos.md) for macOS.

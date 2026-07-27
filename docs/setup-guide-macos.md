@@ -9,20 +9,17 @@ One rule before you begin, because it is the single thing that fails silently wh
 
 | Tool | Where it comes from | Purpose |
 |---|---|---|
-| Postgres.app, with a variant that includes PostgreSQL 16 | postgresapp.com | Runs Zitadel's database. Both the "PostgreSQL 16" download and the "all currently supported versions" download work. Avoid only a PostgreSQL 18-only build, because Zitadel's `34_add_cache_schema` migration fails against PostgreSQL 18, and the Zitadel version this lab is pinned to has no fix for it |
-| Node 20 or newer, and npm | nodejs.org or nvm | Required for the lab. `lab/setup-macos.sh` calls two Node scripts directly, one to sign kill commands and one to generate the kill switch's signing keypair, which needs Node's `crypto` module because the LibreSSL macOS ships as `/usr/bin/openssl` cannot generate Ed25519 keys |
-| Xcode Command Line Tools | run `git` once and macOS offers to install them, or `xcode-select --install` | Needed for `git`, used in the next section. Not needed for the application itself, since you run the packaged `.app` |
-| openssl | ships with macOS | Generating the certificate chain |
-| curl | ships with macOS | Waiting for Zitadel to start, and checking endpoints |
-| python3 | ships with macOS | Reading Zitadel's setup output while seeding the test project and user |
-| security | ships with macOS | Loading the device certificate and trusted CA into the login keychain |
-| Apache (httpd) with mod_ssl | ships with macOS | Serves the mTLS test endpoints. This is the macOS substitute for the containers Linux uses, because this hardware cannot run nested virtualization |
+| Postgres.app, a variant that includes PostgreSQL 16 | postgresapp.com | The database behind the identity provider. Both the "PostgreSQL 16" and "all currently supported versions" downloads work. Avoid a PostgreSQL 18-only build, which the pinned identity provider version cannot run against |
+| Node 20 or newer, and npm | nodejs.org or nvm | Runs the lab's signing scripts |
+| Xcode Command Line Tools | `xcode-select --install` | Provides `git`, used to get the repository. Not needed to run the application itself |
+| openssl | ships with macOS | Generates the certificate chain |
+| curl | ships with macOS | Checks the lab's endpoints during setup |
+| python3 | ships with macOS | Seeds the test project and user |
+| security | ships with macOS | Loads the certificate into the login keychain |
+| Apache (httpd) with mod_ssl | ships with macOS | Serves the mTLS test endpoints, in place of the containers used on Linux |
 
 ---
 ## Installing the application
-
-<!-- TODO: add the package download link once the .dmg is published to GitLab, the same way
-     docs/setup-guide.md's download link was added after the .deb was published (commit c2b561b). -->
 
 Download `DTL App-<version>-universal.dmg`. GitLab requires you to be signed in.
 
@@ -32,17 +29,17 @@ Open the downloaded file to mount it, drag `DTL App.app` into `/Applications`, t
 xattr -cr "/Applications/DTL App.app"
 ```
 
-This clears the mark macOS puts on anything downloaded from the internet. The application is not code-signed, so without this command Gatekeeper blocks it from launching at all, even though `lab/run-app-macos.sh` runs it directly rather than through Finder.
+This clears the mark macOS puts on anything downloaded from the internet. The application is not code-signed, so without this command Gatekeeper blocks it from launching at all.
 
 ---
-## Getting the repository
+## Cloning the repository
 
 ```bash
 git clone git@gitlab.intern.dtl:khanhnhan/dtl-app-poc.git
 cd dtl-app-poc/
 ```
 
-Every command in the rest of this guide assumes you are in this directory.
+> Every command in the rest of this guide assumes you are in this directory.
 
 ---
 ## Setting up the lab
@@ -51,14 +48,14 @@ Every command in the rest of this guide assumes you are in this directory.
 bash lab/setup-macos.sh
 ```
 
-This generates the certificate chain, brings up a dedicated Postgres data directory for Zitadel, starts Apache and Zitadel, seeds a test project and a test user, generates the signing key for the kill switch, and writes the settings specific to this machine. It stops short of loading the certificate into the login keychain, because that needs a real interactive session and cannot be scripted. It prints the two commands for that at the end, covered in "Provisioning the certificate" below.
+This generates the certificate chain, brings up a Postgres database for the identity provider, starts Apache and Zitadel, seeds a test project and a test user, generates the kill switch signing key, and writes the settings specific to this machine.
 
-> This script starts from a clean state every time it runs, including the Postgres data directory Zitadel uses. Fine on a dedicated test machine, destructive on a personal Mac.
+> Each run starts from a clean state, wiping and rebuilding the lab's own database directory inside this repository. The setup step does not touch anything outside the repository, so it is safe to run on a personal Mac and safe to run repeatedly. Provisioning the certificate later does add an entry to your login keychain, which teardown removes again.
 
 ---
 ## Checking the endpoints (optional)
 
-This separates two different kinds of failure. If these checks fail, the lab itself is broken and the application was never going to work regardless of anything you do next. If these checks pass and the application still misbehaves later, the problem is in the application, not the lab.
+This separates two different kinds of failure. If these checks fail, the lab itself is broken and the application was never going to work regardless of anything you do next.
 
 ```bash
 cd lab/certs
@@ -76,8 +73,7 @@ curl -s -o /dev/null -w '%{http_code}\n' --cacert ca.pem https://localhost:8444/
 # -> 200 (the kill switch control plane, no client certificate required)
 
 curl -s --cacert ca.pem https://localhost:8444/kill
-# -> a signed JSON command. An HTML error page or a connection refused here means the kill switch
-#    will not work later
+# -> a signed JSON command. An HTML error page or a connection refused here means the kill switch will not work later
 
 cd ../..
 ```
@@ -94,9 +90,7 @@ security import lab/certs/client.p12 -k ~/Library/Keychains/login.keychain-db -P
 security add-trusted-cert -r trustRoot -p ssl -k ~/Library/Keychains/login.keychain-db lab/certs/ca.pem
 ```
 
-Only the second command, `add-trusted-cert`, prompts you for your login password. The first one does not.
-
-`lab/setup-macos.sh` also prints both commands at the end of its run, for anyone working from the script's output instead of this guide.
+The second command `add-trusted-cert` will prompt you for your login password.
 
 ---
 ## Running the application
@@ -122,7 +116,7 @@ Once you sign in, the browser shows a short confirmation page and the applicatio
 ---
 ## Walking through the features
 
-The features behave the same as the Linux build, described in `docs/setup-guide.md`. One thing is different on macOS. A keychain dialog appears the first time the application starts, and again the first time it touches an internal tool. It reads something like "DTL App wants to access the key 'client' in your keychain." This happens because the application is not code-signed, so macOS cannot verify its identity and asks you to vouch for it instead. Click **Always Allow** both times. It will not ask again.
+The features behave the same as the Linux build, described in `docs/setup-guide.md`. One thing is different on macOS. A keychain dialog appears the first time the application starts, and again the first time it touches an internal tool. Click **Always Allow** both times. It will not ask again.
 
 ---
 ## Kill switch demo
@@ -140,13 +134,13 @@ The application polls every 30 seconds, so the command is picked up within half 
 [wipe] Done. { sessionCleared: true, certDeleted: true, tokensCleared: true }
 ```
 
-No keychain authorization dialog appears during the wipe itself. The command that removes the identity, `security delete-identity`, is run by `/usr/bin/security`, a binary Apple signs, and that is what the keychain is vouching for when it allows the deletion without asking. The kill switch cannot be defeated on macOS by cancelling a prompt, because there is no prompt to cancel.
+<!-- No keychain authorization dialog appears during the wipe itself. The command that removes the identity, `security delete-identity`, is run by `/usr/bin/security`, a binary Apple signs, and that is what the keychain is vouching for when it allows the deletion without asking. The kill switch cannot be defeated on macOS by cancelling a prompt, because there is no prompt to cancel. -->
 
 Launch the application again to see the state a wipe leaves behind. You can still sign in, because the account is untouched, but the device certificate is gone, so the internal tools no longer accept this machine.
 
 ### Bringing the machine back
 
-`lab/reprovision-cert.sh` only knows how to talk to NSS, so it does nothing useful here. Recovering the device means re-running the certificate import by hand, then telling the control plane to stop serving the wipe command.
+Recovering the device means re-running the certificate import by hand, then telling the control plane to stop serving the wipe command.
 
 ```bash
 security import lab/certs/client.p12 \
@@ -166,4 +160,4 @@ Only the import needs to run again, not `add-trusted-cert`, since a wipe leaves 
 bash lab/teardown-macos.sh
 ```
 
-This removes everything the lab created, meaning Apache, Zitadel, the Postgres data directory, the stored tokens, the generated certificates, the client identity and trusted CA in the login keychain, and the kill switch signing key. It leaves the prerequisites you installed earlier untouched, including Postgres.app itself. Unlike setup, teardown runs entirely from a script with no manual step. Running `setup-macos.sh` again brings the whole environment back.
+This removes everything the lab created, meaning Apache, Zitadel, the Postgres data directory, the stored tokens, the generated certificates, the client identity and trusted CA in the login keychain, and the kill switch signing key. It leaves the prerequisites you installed earlier untouched, including Postgres.app itself. Running `setup-macos.sh` again brings the whole environment back.
