@@ -121,7 +121,13 @@ The features behave the same as the Linux build, described in `docs/setup-guide.
 ---
 ## Kill switch demo
 
-With the application running, sign a fresh wipe command and place it where the control plane serves it from.
+The application is still running in your first terminal. Open a second Terminal window for this, and change into the repository directory there first, since the command below uses paths relative to it.
+
+```bash
+cd dtl-app-poc/
+```
+
+Sign a fresh wipe command and place it where the control plane serves it from.
 
 ```bash
 bash lab/kill/sign-command.sh DTL-Ubuntu-Test-Device "cmd-$(date +%s)" wipe 2>/dev/null > lab/kill/kill-command.json
@@ -140,7 +146,7 @@ Launch the application again to see the state a wipe leaves behind. You can stil
 
 ### Bringing the machine back
 
-Recovering the device means re-running the certificate import by hand, then telling the control plane to stop serving the wipe command.
+Recovering the device means re-running the certificate import by hand, then telling the control plane to stop serving the wipe command. Run these from the second terminal you opened earlier, still in the repository directory.
 
 ```bash
 security import lab/certs/client.p12 \
