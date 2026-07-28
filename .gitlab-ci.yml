@@ -2,13 +2,6 @@ stages:
   - lint
   - release
 
-variables:
-  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-
-cache:
-  paths:
-    - $CI_PROJECT_DIR/.cache/pip
-
 auto_lint:
   stage: lint
   image: registry.dtl/eng/lint.dtl/cli:latest
@@ -26,4 +19,15 @@ release_macos:
   tags:
     - mac
   script:
-    - make release
+    - make release-macos
+
+release_linux:
+  stage: release
+  only:
+    refs:
+      - tags
+  tags:
+    - sg
+  image: node:22-bookworm
+  script:
+    - make release-linux
