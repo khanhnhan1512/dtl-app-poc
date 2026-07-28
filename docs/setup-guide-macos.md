@@ -21,7 +21,7 @@ One rule before you begin, because it is the single thing that fails silently wh
 ---
 ## Installing the application
 
-Download [`DTL App-0.1.0-universal.dmg`](http://gitlab.intern.dtl/khanhnhan/dtl-app-poc/-/packages/1).
+Download the `.dmg` from [the latest release](http://gitlab.intern.dtl/khanhnhan/dtl-app-poc/-/releases).
 
 Open the downloaded file to mount it, drag `DTL App.app` into `/Applications`, then eject the disk image.
 

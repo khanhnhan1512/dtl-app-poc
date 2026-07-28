@@ -114,9 +114,9 @@ The one item worth flagging now is client certificates on iOS. Apple forces appl
 
 | Platform | Package | Status |
 |---|---|---|
-| Linux (Debian, Ubuntu) | [`dtl-app_0.1.0_amd64.deb`](http://gitlab.intern.dtl/khanhnhan/dtl-app-poc/-/packages/1) | Available |
+| Linux (Debian, Ubuntu) | [`.deb`](http://gitlab.intern.dtl/khanhnhan/dtl-app-poc/-/releases) | Available |
 | Windows | `.exe` installer | Coming soon |
-| macOS (Intel, Apple Silicon) | [`DTL App-0.1.0-universal.dmg`](http://gitlab.intern.dtl/khanhnhan/dtl-app-poc/-/packages/1) | Available |
+| macOS (Intel, Apple Silicon) | [`.dmg`](http://gitlab.intern.dtl/khanhnhan/dtl-app-poc/-/releases) | Available |
 | iOS, Android | TBD | TBD |
 
 

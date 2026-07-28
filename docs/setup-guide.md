@@ -57,10 +57,10 @@ cd ../..   # back to the repo root
 ## Installing the application
 
 
-Download [`dtl-app_0.1.0_amd64.deb`](http://gitlab.intern.dtl/khanhnhan/dtl-app-poc/-/packages/1) and unpack it.
+Download the `.deb` from [the latest release](http://gitlab.intern.dtl/khanhnhan/dtl-app-poc/-/releases) and unpack it.
 
 ```bash
-dpkg -x /path/to/dtl-app_0.1.0_amd64.deb ~/dtl-app-installed
+dpkg -x ~/Downloads/dtl-app_*_amd64.deb ~/dtl-app-installed
 ```
 
 Keep `~/dtl-app-installed` as the destination, because the launch script looks for the application there and needs no further configuration.
