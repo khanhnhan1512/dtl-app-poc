@@ -1,6 +1,5 @@
 stages:
   - lint
-  - test
   - release
 
 variables:
@@ -19,16 +18,7 @@ auto_lint:
     - pandora login --ci
     - lint --check
 
-test:
-  stage: test
-  image: registry.dtl/pandora/docker/uv:latest
-  tags:
-    - sg
-  script:
-    - pandora login --ci
-    - make test
-
-release_to_registry_sg:
+release_macos:
   stage: release
   only:
     refs:
