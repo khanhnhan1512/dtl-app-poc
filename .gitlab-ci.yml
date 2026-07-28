@@ -30,15 +30,10 @@ test:
 
 release_to_registry_sg:
   stage: release
-  image: registry.dtl/pandora/docker/podman:latest
   only:
     refs:
       - tags
-    variables:
-      - $CI_SERVER_HOST == "gitlab.dtl"
   tags:
-    - docker_socket_bind
-    - sg
+    - mac
   script:
-    - pandora login --ci
     - make release

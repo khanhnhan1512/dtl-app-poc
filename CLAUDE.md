@@ -5,7 +5,7 @@ This is a proof-of-concept (PoC) for a custom managed/enterprise browser control
 
 ## Scope (locked)
 - **5 Core Features ONLY:** Custom branding, custom homepage, custom OIDC auth, device-bound mTLS, and an app-level remote wipe.
-- **Platforms:** Desktop-first (Ubuntu primary, Windows secondary). macOS, iOS, and Android are strictly tabled.
+- **Platforms:** Desktop (Ubuntu and macOS delivered, Windows planned). iOS and Android are tabled.
 - **Out of Scope:** Data Loss Prevention (DLP - no download/copy blocking), true MDM remote uninstall, real PKI infrastructure, and production backend.
 - **Note:** The KIOSK shell + domain allow-list (see Tech stack) are *how the locked-down shell is built*, not a separate sixth feature - they are in scope per brainstorm decisions C3/C4.
 
